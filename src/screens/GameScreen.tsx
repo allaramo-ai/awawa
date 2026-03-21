@@ -1,4 +1,4 @@
-import { createRef, RefObject, useMemo, useState } from 'react';
+import { createRef, RefObject, useEffect, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { AwawaSlots } from '../components/AwawaSlots';
@@ -16,11 +16,13 @@ type GameScreenProps = {
   cardsLeft: number;
   currentHand: Card[];
   protections: Array<Card | null>;
+  awawas: boolean[];
   selectedCardId: string | null;
   canDraw: boolean;
   canPlay: boolean;
   gameOver: boolean;
   lastActionText: string | null;
+  resultText: string | null;
   onDrawCard: () => void;
   onFinishTurn: () => void;
   onRestart: () => void;
@@ -35,11 +37,13 @@ export function GameScreen({
   cardsLeft,
   currentHand,
   protections,
+  awawas,
   selectedCardId,
   canDraw,
   canPlay,
   gameOver,
   lastActionText,
+  resultText,
   onDrawCard,
   onFinishTurn,
   onRestart,
@@ -56,7 +60,7 @@ export function GameScreen({
   );
   const [dropZones, setDropZones] = useState<DropZone[]>([]);
 
-  const handleSlotLayout = (slotIndex: number) => {
+  const measureSlot = (slotIndex: number) => {
     const slotRef = slotRefs[slotIndex];
 
     slotRef.current?.measureInWindow((x, y, width, height) => {
@@ -72,6 +76,20 @@ export function GameScreen({
       });
     });
   };
+
+  const handleSlotLayout = (slotIndex: number) => {
+    measureSlot(slotIndex);
+  };
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      for (let index = 0; index < GAME_CONFIG.awawaSlots; index += 1) {
+        measureSlot(index);
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [currentPlayer, lastActionText, awawas, protections, slotRefs]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -96,7 +114,7 @@ export function GameScreen({
             <View style={styles.gameOverCard}>
               <Text style={styles.gameOverTitle}>Game Over</Text>
               <Text style={styles.gameOverText}>
-                The deck has run out of cards.
+                {resultText ?? 'The deck has run out of cards.'}
               </Text>
               <View style={styles.restartWrap}>
                 <PrimaryButton label="Start Over" onPress={onRestart} />
@@ -113,6 +131,7 @@ export function GameScreen({
               />
               <AwawaSlots
                 protections={protections}
+                awawas={awawas}
                 slotRefs={slotRefs}
                 onSlotLayout={handleSlotLayout}
               />

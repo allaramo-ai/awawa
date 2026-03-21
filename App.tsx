@@ -70,6 +70,9 @@ export default function App() {
 
   const currentPlayer = getCurrentPlayer(gameState);
   const gameOver = gameState.status === 'game_over';
+  const combinedActionText = [gameState.lastActionText, ...currentPlayer.notices]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <>
@@ -80,11 +83,13 @@ export default function App() {
         cardsLeft={gameState.drawPile.length}
         currentHand={currentPlayer.hand}
         protections={currentPlayer.protections}
+        awawas={currentPlayer.awawas}
         selectedCardId={gameState.selectedCardId}
         canDraw={canDrawCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}
         gameOver={gameOver}
-        lastActionText={gameState.lastActionText}
+        lastActionText={combinedActionText || null}
+        resultText={gameState.resultText}
         onDrawCard={drawCard}
         onFinishTurn={finishTurn}
         onRestart={restartGame}

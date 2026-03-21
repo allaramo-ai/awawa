@@ -21,6 +21,8 @@ export type PlayerState = {
   id: number;
   hand: Card[];
   protections: Array<Card | null>;
+  awawas: boolean[];
+  notices: string[];
   hasDrawnThisTurn: boolean;
 };
 
@@ -32,5 +34,6 @@ export type GameState = {
   drawPile: Card[];
   selectedCardId: string | null;
   lastActionText: string | null;
+  resultText: string | null;
   status: GameStatus;
 };

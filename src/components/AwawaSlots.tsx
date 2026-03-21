@@ -10,12 +10,14 @@ type SlotRef = RefObject<View | null>;
 
 type AwawaSlotsProps = {
   protections: Array<Card | null>;
+  awawas: boolean[];
   slotRefs: SlotRef[];
   onSlotLayout: (slotIndex: number) => void;
 };
 
 export function AwawaSlots({
   protections,
+  awawas,
   slotRefs,
   onSlotLayout,
 }: AwawaSlotsProps) {
@@ -27,17 +29,22 @@ export function AwawaSlots({
             key={`protection-${index}`}
             ref={slotRefs[index]}
             onLayout={() => onSlotLayout(index)}
-            style={styles.slot}
+            style={[styles.slot, !awawas[index] && styles.hiddenSlot]}
           >
-            <Text style={styles.label}>{card ? getCardLabel(card) : ''}</Text>
+            <Text style={styles.label}>
+              {awawas[index] && card ? getCardLabel(card) : ''}
+            </Text>
           </View>
         ))}
       </View>
 
       <View style={styles.row}>
-        {protections.map((_, index) => (
-          <View key={`awawa-${index}`} style={styles.slot}>
-            <Text style={styles.label}>Awawa</Text>
+        {awawas.map((alive, index) => (
+          <View
+            key={`awawa-${index}`}
+            style={[styles.slot, !alive && styles.hiddenSlot]}
+          >
+            <Text style={styles.label}>{alive ? 'Awawa' : ''}</Text>
           </View>
         ))}
       </View>
@@ -64,6 +71,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xs,
+  },
+  hiddenSlot: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   label: {
     color: colors.textPrimary,
