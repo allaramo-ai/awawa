@@ -3,6 +3,7 @@ import {
   canDrawCard,
   canPlaySelectedCard,
   createGameState,
+  dismissCurrentNotification,
   drawCard,
   finishTurn,
   getCurrentPlayer,
@@ -43,6 +44,7 @@ describe('gameState', () => {
 
     expect(getCurrentPlayer(afterFirstDraw).hand).toHaveLength(3);
     expect(getCurrentPlayer(afterFirstDraw).hasDrawnThisTurn).toBe(true);
+    expect(afterFirstDraw.lastActionText).toBeNull();
     expect(afterSecondDraw).toBe(afterFirstDraw);
   });
 
@@ -92,6 +94,7 @@ describe('gameState', () => {
       protectionCard!.id,
     );
     expect(afterTurnTwo.players[0].protections[0]?.id).toBe(protectionCard!.id);
+    expect(afterPlacement.lastActionText).toBeNull();
   });
 
   it('does not allow playable cards to be placed in protection slots', () => {
@@ -214,7 +217,10 @@ describe('gameState', () => {
 
     expect(afterPlay.players[2].protections[0]?.type).toBe('solcito');
     expect(afterPlay.players[2].protections[0]?.sourcePlayerId).toBe(1);
-    expect(afterPlay.lastActionText).toContain('Your Solcito landed on Player 3.');
+    expect(afterPlay.lastActionText).toBeNull();
+    expect(afterPlay.players[2].notices.join(' ')).toContain(
+      "P1's Solcito landed on your Awawa board.",
+    );
   });
 
   it('aguila prioritizes killing the awawa marked by solcito', () => {
@@ -247,8 +253,8 @@ describe('gameState', () => {
     expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(4);
     expect(afterPlay.players[1].protections.every((card) => card === null)).toBe(true);
     expect(afterPlay.players[2].protections.every((card) => card === null)).toBe(true);
-    expect(afterPlay.lastActionText).toContain(
-      'Your \u00C1guila took one Awawa from Player 2.',
+    expect(afterPlay.players[0].notices.join(' ')).toContain(
+      'Your \u00C1guila took one Awawa from P2.',
     );
   });
 
@@ -276,7 +282,7 @@ describe('gameState', () => {
 
     expect(nextState.status).toBe('game_over');
     expect(nextState.resultText).toContain(
-      "It's a draw between Player 1, Player 2",
+      "It's a draw between P1, P2",
     );
   });
 
@@ -291,7 +297,7 @@ describe('gameState', () => {
 
     expect(getCurrentPlayer(afterFinishTurn).id).toBe(2);
     expect(getCurrentPlayer(afterFinishTurn).notices.join(' ')).toContain(
-      "Player 1's \u00C1guila took one Awawa from you",
+      "P1's \u00C1guila took one Awawa from you",
     );
   });
 
@@ -307,5 +313,17 @@ describe('gameState', () => {
     const playerThreeTurn = finishTurn(afterPlayerTwo);
 
     expect(playerThreeTurn.players[2].notices).toHaveLength(2);
+  });
+
+  it('dismisses the current player notification permanently', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+
+    const attackedState = finishTurn(playSelectedCard(selectCard(state, 'aguila-x')));
+    const dismissedState = dismissCurrentNotification(attackedState);
+
+    expect(attackedState.players[1].notices).toHaveLength(1);
+    expect(dismissedState.players[1].notices).toHaveLength(0);
   });
 });

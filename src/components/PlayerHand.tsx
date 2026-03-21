@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 
+import { GAME_CONFIG } from '../constants/game';
 import { canCardProtect, getCardLabel } from '../game/cards';
 import { Card } from '../game/types';
 import { colors } from '../theme/colors';
@@ -35,20 +36,29 @@ export function PlayerHand({
   onSelectCard,
   onDropProtection,
 }: PlayerHandProps) {
+  const visibleCards = Array.from(
+    { length: GAME_CONFIG.maxHandSize },
+    (_, index) => cards[index] ?? null,
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Your cards</Text>
       <View style={styles.row}>
-        {cards.map((card) => (
-          <HandCard
-            key={card.id}
-            card={card}
-            isSelected={selectedCardId === card.id}
-            dropZones={dropZones}
-            onSelectCard={onSelectCard}
-            onDropProtection={onDropProtection}
-          />
-        ))}
+        {visibleCards.map((card, index) =>
+          card ? (
+            <HandCard
+              key={card.id}
+              card={card}
+              isSelected={selectedCardId === card.id}
+              dropZones={dropZones}
+              onSelectCard={onSelectCard}
+              onDropProtection={onDropProtection}
+            />
+          ) : (
+            <View key={`empty-slot-${index}`} style={styles.emptyCard} />
+          ),
+        )}
       </View>
     </View>
   );
@@ -167,6 +177,14 @@ const styles = StyleSheet.create({
       height: 4,
     },
     elevation: 4,
+  },
+  emptyCard: {
+    flex: 1,
+    minHeight: 108,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.surfaceMuted,
+    backgroundColor: 'transparent',
   },
   label: {
     color: colors.textPrimary,

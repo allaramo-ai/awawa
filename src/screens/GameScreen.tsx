@@ -25,6 +25,7 @@ type GameScreenProps = {
   gameOver: boolean;
   notificationMessages: string[];
   resultText: string | null;
+  onDismissNotification: () => void;
   onDrawCard: () => void;
   onFinishTurn: () => void;
   onRestart: () => void;
@@ -47,6 +48,7 @@ export function GameScreen({
   gameOver,
   notificationMessages,
   resultText,
+  onDismissNotification,
   onDrawCard,
   onFinishTurn,
   onRestart,
@@ -62,12 +64,9 @@ export function GameScreen({
     [],
   );
   const [dropZones, setDropZones] = useState<DropZone[]>([]);
-  const [notificationIndex, setNotificationIndex] = useState(0);
-
   const defaultMessage = 'Protect your Awawas or play a card.';
-  const activeNotification =
-    notificationMessages[notificationIndex] ?? defaultMessage;
-  const hasDismissibleNotification = notificationIndex < notificationMessages.length;
+  const activeNotification = notificationMessages[0] ?? defaultMessage;
+  const hasDismissibleNotification = notificationMessages.length > 0;
 
   const measureSlot = (slotIndex: number) => {
     const slotRef = slotRefs[slotIndex];
@@ -99,16 +98,6 @@ export function GameScreen({
 
     return () => cancelAnimationFrame(frame);
   }, [currentPlayer, activeNotification, awawas, protections, slotRefs]);
-
-  useEffect(() => {
-    setNotificationIndex(0);
-  }, [notificationMessages, currentPlayer]);
-
-  const dismissNotification = () => {
-    setNotificationIndex((current) =>
-      current < notificationMessages.length ? current + 1 : current,
-    );
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -145,13 +134,15 @@ export function GameScreen({
             </View>
           ) : (
             <View style={styles.playArea}>
-              <PlayerHand
-                cards={currentHand}
-                selectedCardId={selectedCardId}
-                dropZones={dropZones}
-                onSelectCard={onSelectCard}
-                onDropProtection={onDropProtection}
-              />
+              <View style={styles.handArea}>
+                <PlayerHand
+                  cards={currentHand}
+                  selectedCardId={selectedCardId}
+                  dropZones={dropZones}
+                  onSelectCard={onSelectCard}
+                  onDropProtection={onDropProtection}
+                />
+              </View>
               <AwawaSlots
                 protections={protections}
                 awawas={awawas}
@@ -160,10 +151,19 @@ export function GameScreen({
               />
               <View style={styles.alertBox}>
                 <View style={styles.alertMessage}>
-                  <Text style={styles.actionText}>{activeNotification}</Text>
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={styles.actionText}
+                  >
+                    {activeNotification}
+                  </Text>
                 </View>
                 {hasDismissibleNotification ? (
-                  <Pressable onPress={dismissNotification} style={styles.closeButton}>
+                  <Pressable
+                    onPress={onDismissNotification}
+                    style={styles.closeButton}
+                  >
                     <Text style={styles.closeLabel}>X</Text>
                   </Pressable>
                 ) : null}
@@ -247,16 +247,19 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
+  handArea: {
+    minHeight: 150,
+  },
   actionText: {
     color: colors.textSecondary,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 18,
     textAlign: 'center',
-    minHeight: 20,
   },
   alertBox: {
     flexDirection: 'row',
     gap: spacing.sm,
+    minHeight: 52,
   },
   alertMessage: {
     flex: 1,

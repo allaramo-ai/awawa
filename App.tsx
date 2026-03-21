@@ -5,6 +5,7 @@ import {
   canDrawCard,
   canPlaySelectedCard,
   createGameState,
+  dismissCurrentNotification,
   drawCard as drawGameCard,
   finishTurn as finishGameTurn,
   getCurrentPlayer,
@@ -59,6 +60,12 @@ export default function App() {
     );
   };
 
+  const handleDismissNotification = () => {
+    setGameState((currentState) =>
+      currentState ? dismissCurrentNotification(currentState) : currentState,
+    );
+  };
+
   if (!gameState) {
     return (
       <>
@@ -70,10 +77,7 @@ export default function App() {
 
   const currentPlayer = getCurrentPlayer(gameState);
   const gameOver = gameState.status === 'game_over';
-  const notificationMessages = [
-    ...splitNotificationText(gameState.lastActionText),
-    ...currentPlayer.notices,
-  ];
+  const notificationMessages = currentPlayer.notices;
 
   return (
     <>
@@ -92,6 +96,7 @@ export default function App() {
         gameOver={gameOver}
         notificationMessages={notificationMessages}
         resultText={gameState.resultText}
+        onDismissNotification={handleDismissNotification}
         onDrawCard={drawCard}
         onFinishTurn={finishTurn}
         onRestart={restartGame}
@@ -101,15 +106,4 @@ export default function App() {
       />
     </>
   );
-}
-
-function splitNotificationText(text: string | null) {
-  if (!text) {
-    return [];
-  }
-
-  return text
-    .split(/(?<=[.!?])\s+/)
-    .map((message) => message.trim())
-    .filter(Boolean);
 }

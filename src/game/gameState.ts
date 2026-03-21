@@ -44,10 +44,10 @@ function buildDeckWinnerText(players: PlayerState[]) {
   const winners = counts.filter((entry) => entry.awawas === highest);
 
   if (winners.length === 1) {
-    return `Game over. Player ${winners[0].id} wins with ${highest} Awawas.`;
+    return `Game over. P${winners[0].id} wins with ${highest} Awawas.`;
   }
 
-  const winnerLabel = winners.map((entry) => `Player ${entry.id}`).join(', ');
+  const winnerLabel = winners.map((entry) => `P${entry.id}`).join(', ');
   return `Game over. It's a draw between ${winnerLabel} with ${highest} Awawas.`;
 }
 
@@ -60,7 +60,7 @@ function getResolvedGameStatus(drawPile: Card[], players: PlayerState[]) {
     return {
       status: 'game_over' as const,
       resultText: winner
-        ? `Game over. Player ${winner.id} wins by being the last player with Awawas.`
+        ? `Game over. P${winner.id} wins by being the last player with Awawas.`
         : `Game over. It's a draw between no players.`,
     };
   }
@@ -333,8 +333,8 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
 
     impactMessages.push(
       awawaLost
-        ? `Your \u00C1guila took one Awawa from Player ${player.id}.`
-        : `Your \u00C1guila removed protections from Player ${player.id}.`,
+        ? `Your \u00C1guila took one Awawa from P${player.id}.`
+        : `Your \u00C1guila removed protections from P${player.id}.`,
     );
 
     return {
@@ -343,20 +343,27 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
       notices: [
         ...attackedPlayer.notices,
         awawaLost
-          ? `Player ${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
-          : `Player ${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`,
+          ? `P${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
+          : `P${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`,
       ],
     };
   });
 
   const resolved = getResolvedGameStatus(state.drawPile, players);
+  const actorMessages = resolved.status === 'game_over' ? [] : impactMessages;
 
   return {
     ...state,
-    players,
+    players: players.map((player, index) =>
+      index === state.currentPlayerIndex
+        ? {
+            ...player,
+            notices: [...player.notices, ...actorMessages],
+          }
+        : player,
+    ),
     selectedCardId: null,
-    lastActionText:
-      resolved.status === 'game_over' ? null : impactMessages.join(' '),
+    lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
@@ -433,21 +440,29 @@ function playSolcito(state: GameState, selectedCard: Card): GameState {
       protections,
       notices: [
         ...player.notices,
-        `Player ${actorId}'s Solcito landed on your Awawa board.`,
+        `P${actorId}'s Solcito landed on your Awawa board.`,
       ],
     };
   });
 
   const resolved = getResolvedGameStatus(state.drawPile, players);
+  const actorMessage =
+    resolved.status === 'game_over'
+      ? null
+      : `Your Solcito landed on P${players[target.playerIndex].id}.`;
 
   return {
     ...state,
-    players,
+    players: players.map((player, index) =>
+      index === state.currentPlayerIndex && actorMessage
+        ? {
+            ...player,
+            notices: [...player.notices, actorMessage],
+          }
+        : player,
+    ),
     selectedCardId: null,
-    lastActionText:
-      resolved.status === 'game_over'
-        ? null
-        : `Your Solcito landed on Player ${players[target.playerIndex].id}.`,
+    lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
@@ -552,5 +567,25 @@ export function finishTurn(state: GameState): GameState {
     turnsCompleted: state.turnsCompleted + 1,
     selectedCardId: null,
     lastActionText: null,
+  };
+}
+
+export function dismissCurrentNotification(state: GameState): GameState {
+  if (state.status === 'game_over') {
+    return state;
+  }
+
+  const players = state.players.map((player, index) =>
+    index === state.currentPlayerIndex
+      ? {
+          ...player,
+          notices: player.notices.slice(1),
+        }
+      : player,
+  );
+
+  return {
+    ...state,
+    players,
   };
 }
