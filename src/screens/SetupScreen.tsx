@@ -2,11 +2,16 @@ import { useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { PlayerCountSlider } from '../components/PlayerCountSlider';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { PLAYER_COUNT } from '../constants/game';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
-export function SetupScreen() {
+type SetupScreenProps = {
+  onStartGame: (playerCount: number) => void;
+};
+
+export function SetupScreen({ onStartGame }: SetupScreenProps) {
   const [playerCount, setPlayerCount] = useState<number>(
     PLAYER_COUNT.defaultValue,
   );
@@ -26,6 +31,11 @@ export function SetupScreen() {
         <PlayerCountSlider
           value={playerCount}
           onValueChange={setPlayerCount}
+        />
+
+        <PrimaryButton
+          label="Start Game"
+          onPress={() => onStartGame(playerCount)}
         />
       </View>
     </SafeAreaView>
