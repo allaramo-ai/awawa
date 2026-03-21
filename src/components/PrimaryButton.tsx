@@ -8,6 +8,7 @@ type PrimaryButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   variant?: 'solid' | 'outline';
+  size?: 'default' | 'compact';
 };
 
 export function PrimaryButton({
@@ -15,6 +16,7 @@ export function PrimaryButton({
   onPress,
   disabled = false,
   variant = 'solid',
+  size = 'default',
 }: PrimaryButtonProps) {
   return (
     <Pressable
@@ -22,6 +24,7 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        size === 'compact' && styles.compactButton,
         variant === 'solid' ? styles.solidButton : styles.outlineButton,
         disabled && styles.disabledButton,
         pressed && !disabled && styles.pressedButton,
@@ -30,6 +33,7 @@ export function PrimaryButton({
       <Text
         style={[
           styles.label,
+          size === 'compact' && styles.compactLabel,
           variant === 'solid' ? styles.solidLabel : styles.outlineLabel,
           disabled && styles.disabledLabel,
         ]}
@@ -49,6 +53,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  compactButton: {
+    minHeight: 50,
+    borderRadius: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   solidButton: {
     backgroundColor: colors.accent,
   },
@@ -66,6 +76,9 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '800',
+  },
+  compactLabel: {
+    fontSize: 14,
   },
   solidLabel: {
     color: colors.background,

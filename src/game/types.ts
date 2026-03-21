@@ -5,7 +5,9 @@ export type CardTypeId =
   | 'cueva'
   | 'planta'
   | 'arbusto'
-  | 'aguila';
+  | 'aguila'
+  | 'bebe'
+  | 'solcito';
 
 export type CardDefinition = {
   id: CardTypeId;
@@ -15,6 +17,7 @@ export type CardDefinition = {
 export type Card = {
   id: string;
   type: CardTypeId;
+  sourcePlayerId?: number;
 };
 
 export type PlayerState = {
@@ -24,6 +27,7 @@ export type PlayerState = {
   awawas: boolean[];
   notices: string[];
   hasDrawnThisTurn: boolean;
+  hasPlayedCardThisTurn: boolean;
 };
 
 export type GameStatus = 'playing' | 'game_over';
@@ -32,6 +36,8 @@ export type GameState = {
   players: PlayerState[];
   currentPlayerIndex: number;
   drawPile: Card[];
+  colonyCount: number;
+  turnsCompleted: number;
   selectedCardId: string | null;
   lastActionText: string | null;
   resultText: string | null;

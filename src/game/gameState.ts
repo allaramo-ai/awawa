@@ -10,11 +10,22 @@ function createPlayers(playerCount: number): PlayerState[] {
     awawas: Array.from({ length: GAME_CONFIG.awawaSlots }, () => true),
     notices: [],
     hasDrawnThisTurn: false,
+    hasPlayedCardThisTurn: false,
   }));
 }
 
 function getAliveAwawaCount(player: PlayerState) {
   return player.awawas.filter(Boolean).length;
+}
+
+function getMissingAwawaSlotIndex(player: PlayerState) {
+  return player.awawas.findIndex((alive) => !alive);
+}
+
+function getEmptyProtectionSlotIndex(player: PlayerState) {
+  return player.protections.findIndex(
+    (protection, index) => player.awawas[index] && !protection,
+  );
 }
 
 function getActivePlayerIndexes(players: PlayerState[]) {
@@ -54,7 +65,7 @@ function getResolvedGameStatus(drawPile: Card[], players: PlayerState[]) {
     };
   }
 
-  if (drawPile.length === 0) {
+  if (drawPile.length < 0) {
     return {
       status: 'game_over' as const,
       resultText: buildDeckWinnerText(players),
@@ -85,6 +96,46 @@ function clearAliveProtections(player: PlayerState) {
   );
 }
 
+function isFirstRound(state: GameState) {
+  return state.turnsCompleted < state.players.length;
+}
+
+function canPlayAguila(state: GameState, player: PlayerState) {
+  return !player.hasPlayedCardThisTurn && !isFirstRound(state);
+}
+
+function canPlayBebe(state: GameState, player: PlayerState) {
+  return (
+    !player.hasPlayedCardThisTurn &&
+    state.colonyCount >= 1 &&
+    getAliveAwawaCount(player) < GAME_CONFIG.awawaSlots &&
+    getMissingAwawaSlotIndex(player) !== -1
+  );
+}
+
+function getNextSolcitoTarget(state: GameState) {
+  for (let step = 1; step < state.players.length; step += 1) {
+    const index = (state.currentPlayerIndex + step) % state.players.length;
+    const player = state.players[index];
+
+    if (getAliveAwawaCount(player) === 0) {
+      continue;
+    }
+
+    const slotIndex = getEmptyProtectionSlotIndex(player);
+
+    if (slotIndex !== -1) {
+      return { playerIndex: index, slotIndex };
+    }
+  }
+
+  return null;
+}
+
+function canPlaySolcito(state: GameState, player: PlayerState) {
+  return !player.hasPlayedCardThisTurn && !!getNextSolcitoTarget(state);
+}
+
 export function createGameState(playerCount: number): GameState {
   const drawPile = [...buildConfiguredDeck()];
   const players = createPlayers(playerCount);
@@ -100,6 +151,8 @@ export function createGameState(playerCount: number): GameState {
           players,
           currentPlayerIndex: 0,
           drawPile,
+          colonyCount: GAME_CONFIG.initialColonySize,
+          turnsCompleted: 0,
           selectedCardId: null,
           lastActionText: null,
           resultText: resolved.resultText,
@@ -117,6 +170,8 @@ export function createGameState(playerCount: number): GameState {
     players,
     currentPlayerIndex: 0,
     drawPile,
+    colonyCount: GAME_CONFIG.initialColonySize,
+    turnsCompleted: 0,
     selectedCardId: null,
     lastActionText: null,
     resultText: resolved.resultText,
@@ -142,7 +197,6 @@ export function canDrawCard(state: GameState) {
   return (
     state.status === 'playing' &&
     getAliveAwawaCount(player) > 0 &&
-    state.drawPile.length > 0 &&
     player.hand.length < GAME_CONFIG.maxHandSize &&
     !player.hasDrawnThisTurn
   );
@@ -156,12 +210,12 @@ export function drawCard(state: GameState): GameState {
   const nextCard = state.drawPile[0];
 
   if (!nextCard) {
-    const resolved = getResolvedGameStatus([], state.players);
-
     return {
       ...state,
-      resultText: resolved.resultText,
-      status: resolved.status,
+      selectedCardId: null,
+      lastActionText: null,
+      resultText: buildDeckWinnerText(state.players),
+      status: 'game_over',
     };
   }
 
@@ -183,7 +237,7 @@ export function drawCard(state: GameState): GameState {
     players,
     drawPile,
     selectedCardId: null,
-    lastActionText: resolved.status === 'game_over' ? null : 'Card drawn.',
+    lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
@@ -206,18 +260,43 @@ export function selectCard(state: GameState, cardId: string): GameState {
 
 export function canPlaySelectedCard(state: GameState) {
   const selectedCard = getSelectedCard(state);
+  const currentPlayer = getCurrentPlayer(state);
 
-  return (
-    state.status === 'playing' &&
-    !!selectedCard &&
-    canCardBePlayed(selectedCard)
-  );
+  if (
+    state.status !== 'playing' ||
+    !selectedCard ||
+    !canCardBePlayed(selectedCard)
+  ) {
+    return false;
+  }
+
+  if (selectedCard.type === 'aguila') {
+    return canPlayAguila(state, currentPlayer);
+  }
+
+  if (selectedCard.type === 'bebe') {
+    return canPlayBebe(state, currentPlayer);
+  }
+
+  if (selectedCard.type === 'solcito') {
+    return canPlaySolcito(state, currentPlayer);
+  }
+
+  return false;
 }
 
-function killOneUnprotectedAwawa(player: PlayerState) {
-  const targetIndex = player.awawas.findIndex(
-    (alive, index) => alive && !player.protections[index],
+function killOnePreferredAwawa(player: PlayerState) {
+  const solcitoIndex = player.awawas.findIndex(
+    (alive, index) =>
+      alive && player.protections[index]?.type === 'solcito',
   );
+
+  const targetIndex =
+    solcitoIndex !== -1
+      ? solcitoIndex
+      : player.awawas.findIndex(
+          (alive, index) => alive && !player.protections[index],
+        );
 
   if (targetIndex === -1) {
     return player;
@@ -236,17 +315,7 @@ function killOneUnprotectedAwawa(player: PlayerState) {
   };
 }
 
-export function playSelectedCard(state: GameState): GameState {
-  const selectedCard = getSelectedCard(state);
-
-  if (
-    !selectedCard ||
-    !canCardBePlayed(selectedCard) ||
-    state.status === 'game_over'
-  ) {
-    return state;
-  }
-
+function playAguila(state: GameState, selectedCard: Card): GameState {
   const actorId = state.players[state.currentPlayerIndex].id;
   const impactMessages: string[] = [];
   const players = state.players.map((player, index) => {
@@ -254,10 +323,11 @@ export function playSelectedCard(state: GameState): GameState {
       return {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        hasPlayedCardThisTurn: true,
       };
     }
 
-    const attackedPlayer = killOneUnprotectedAwawa(player);
+    const attackedPlayer = killOnePreferredAwawa(player);
     const awawaLost =
       getAliveAwawaCount(attackedPlayer) < getAliveAwawaCount(player);
 
@@ -286,12 +356,127 @@ export function playSelectedCard(state: GameState): GameState {
     players,
     selectedCardId: null,
     lastActionText:
-      resolved.status === 'game_over'
-        ? null
-        : impactMessages.join(' '),
+      resolved.status === 'game_over' ? null : impactMessages.join(' '),
     resultText: resolved.resultText,
     status: resolved.status,
   };
+}
+
+function playBebe(state: GameState, selectedCard: Card): GameState {
+  const currentPlayer = getCurrentPlayer(state);
+  const missingSlotIndex = getMissingAwawaSlotIndex(currentPlayer);
+
+  if (missingSlotIndex === -1) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index !== state.currentPlayerIndex) {
+      return player;
+    }
+
+    const awawas = [...player.awawas];
+    awawas[missingSlotIndex] = true;
+
+    return {
+      ...player,
+      hand: player.hand.filter((card) => card.id !== selectedCard.id),
+      awawas,
+      hasPlayedCardThisTurn: true,
+    };
+  });
+
+  const colonyCount = state.colonyCount - 1;
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    colonyCount,
+    selectedCardId: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+function playSolcito(state: GameState, selectedCard: Card): GameState {
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const target = getNextSolcitoTarget(state);
+
+  if (!target) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        hasPlayedCardThisTurn: true,
+      };
+    }
+
+    if (index !== target.playerIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[target.slotIndex] = {
+      id: `${selectedCard.id}-target-${player.id}`,
+      type: 'solcito',
+      sourcePlayerId: actorId,
+    };
+
+    return {
+      ...player,
+      protections,
+      notices: [
+        ...player.notices,
+        `Player ${actorId}'s Solcito landed on your Awawa board.`,
+      ],
+    };
+  });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    lastActionText:
+      resolved.status === 'game_over'
+        ? null
+        : `Your Solcito landed on Player ${players[target.playerIndex].id}.`,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+export function playSelectedCard(state: GameState): GameState {
+  const selectedCard = getSelectedCard(state);
+
+  if (
+    !selectedCard ||
+    !canPlaySelectedCard(state) ||
+    state.status === 'game_over'
+  ) {
+    return state;
+  }
+
+  if (selectedCard.type === 'aguila') {
+    return playAguila(state, selectedCard);
+  }
+
+  if (selectedCard.type === 'bebe') {
+    return playBebe(state, selectedCard);
+  }
+
+  if (selectedCard.type === 'solcito') {
+    return playSolcito(state, selectedCard);
+  }
+
+  return state;
 }
 
 export function placeCardInProtection(
@@ -334,7 +519,7 @@ export function placeCardInProtection(
     players,
     selectedCardId:
       state.selectedCardId === cardId ? null : state.selectedCardId,
-    lastActionText: `${card.type} placed as protection.`,
+    lastActionText: null,
   };
 }
 
@@ -353,6 +538,7 @@ export function finishTurn(state: GameState): GameState {
         ...player,
         notices: index === state.currentPlayerIndex ? [] : player.notices,
         hasDrawnThisTurn: false,
+        hasPlayedCardThisTurn: false,
       };
     }
 
@@ -363,6 +549,7 @@ export function finishTurn(state: GameState): GameState {
     ...state,
     players,
     currentPlayerIndex: nextPlayerIndex,
+    turnsCompleted: state.turnsCompleted + 1,
     selectedCardId: null,
     lastActionText: null,
   };

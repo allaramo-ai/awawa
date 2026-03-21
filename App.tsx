@@ -70,9 +70,10 @@ export default function App() {
 
   const currentPlayer = getCurrentPlayer(gameState);
   const gameOver = gameState.status === 'game_over';
-  const combinedActionText = [gameState.lastActionText, ...currentPlayer.notices]
-    .filter(Boolean)
-    .join(' ');
+  const notificationMessages = [
+    ...splitNotificationText(gameState.lastActionText),
+    ...currentPlayer.notices,
+  ];
 
   return (
     <>
@@ -81,6 +82,7 @@ export default function App() {
         playerCount={gameState.players.length}
         currentPlayer={currentPlayer.id}
         cardsLeft={gameState.drawPile.length}
+        colonyCount={gameState.colonyCount}
         currentHand={currentPlayer.hand}
         protections={currentPlayer.protections}
         awawas={currentPlayer.awawas}
@@ -88,7 +90,7 @@ export default function App() {
         canDraw={canDrawCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}
         gameOver={gameOver}
-        lastActionText={combinedActionText || null}
+        notificationMessages={notificationMessages}
         resultText={gameState.resultText}
         onDrawCard={drawCard}
         onFinishTurn={finishTurn}
@@ -99,4 +101,15 @@ export default function App() {
       />
     </>
   );
+}
+
+function splitNotificationText(text: string | null) {
+  if (!text) {
+    return [];
+  }
+
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((message) => message.trim())
+    .filter(Boolean);
 }

@@ -1,7 +1,8 @@
 import { createRef, RefObject, useEffect, useMemo, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { AwawaSlots } from '../components/AwawaSlots';
+import { CounterBox } from '../components/CounterBox';
 import { DeckIndicator } from '../components/DeckIndicator';
 import { DropZone, PlayerHand } from '../components/PlayerHand';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -14,6 +15,7 @@ type GameScreenProps = {
   playerCount: number;
   currentPlayer: number;
   cardsLeft: number;
+  colonyCount: number;
   currentHand: Card[];
   protections: Array<Card | null>;
   awawas: boolean[];
@@ -21,7 +23,7 @@ type GameScreenProps = {
   canDraw: boolean;
   canPlay: boolean;
   gameOver: boolean;
-  lastActionText: string | null;
+  notificationMessages: string[];
   resultText: string | null;
   onDrawCard: () => void;
   onFinishTurn: () => void;
@@ -35,6 +37,7 @@ export function GameScreen({
   playerCount,
   currentPlayer,
   cardsLeft,
+  colonyCount,
   currentHand,
   protections,
   awawas,
@@ -42,7 +45,7 @@ export function GameScreen({
   canDraw,
   canPlay,
   gameOver,
-  lastActionText,
+  notificationMessages,
   resultText,
   onDrawCard,
   onFinishTurn,
@@ -59,6 +62,12 @@ export function GameScreen({
     [],
   );
   const [dropZones, setDropZones] = useState<DropZone[]>([]);
+  const [notificationIndex, setNotificationIndex] = useState(0);
+
+  const defaultMessage = 'Protect your Awawas or play a card.';
+  const activeNotification =
+    notificationMessages[notificationIndex] ?? defaultMessage;
+  const hasDismissibleNotification = notificationIndex < notificationMessages.length;
 
   const measureSlot = (slotIndex: number) => {
     const slotRef = slotRefs[slotIndex];
@@ -89,7 +98,17 @@ export function GameScreen({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [currentPlayer, lastActionText, awawas, protections, slotRefs]);
+  }, [currentPlayer, activeNotification, awawas, protections, slotRefs]);
+
+  useEffect(() => {
+    setNotificationIndex(0);
+  }, [notificationMessages, currentPlayer]);
+
+  const dismissNotification = () => {
+    setNotificationIndex((current) =>
+      current < notificationMessages.length ? current + 1 : current,
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -99,12 +118,16 @@ export function GameScreen({
             <Text style={styles.turnLabel}>Turn of Player {currentPlayer}</Text>
             <Text style={styles.turnMeta}>{playerCount} players in this game</Text>
           </View>
-          <View style={styles.deckBlock}>
-            <DeckIndicator cardsLeft={cardsLeft} />
+          <View style={styles.sidePanel}>
+            <View style={styles.topCounters}>
+              <CounterBox title="Colonia" value={colonyCount} />
+              <DeckIndicator cardsLeft={cardsLeft} />
+            </View>
             <PrimaryButton
               label="Draw"
               onPress={onDrawCard}
               disabled={gameOver || !canDraw}
+              size="compact"
             />
           </View>
         </View>
@@ -135,10 +158,16 @@ export function GameScreen({
                 slotRefs={slotRefs}
                 onSlotLayout={handleSlotLayout}
               />
-              <Text style={styles.actionText}>
-                {lastActionText ??
-                  'Select \u00C1guila to play it, or drag another card into a protection slot.'}
-              </Text>
+              <View style={styles.alertBox}>
+                <View style={styles.alertMessage}>
+                  <Text style={styles.actionText}>{activeNotification}</Text>
+                </View>
+                {hasDismissibleNotification ? (
+                  <Pressable onPress={dismissNotification} style={styles.closeButton}>
+                    <Text style={styles.closeLabel}>X</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           )}
         </View>
@@ -191,7 +220,7 @@ const styles = StyleSheet.create({
   },
   turnLabel: {
     color: colors.textPrimary,
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: '800',
   },
   turnMeta: {
@@ -199,9 +228,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  deckBlock: {
-    width: 120,
+  sidePanel: {
+    width: 188,
     gap: spacing.md,
+  },
+  topCounters: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   centerContent: {
     flex: 1,
@@ -218,7 +252,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    minHeight: 40,
+    minHeight: 20,
+  },
+  alertBox: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  alertMessage: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceMuted,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButton: {
+    width: 52,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceMuted,
+  },
+  closeLabel: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
   },
   gameOverCard: {
     width: '100%',

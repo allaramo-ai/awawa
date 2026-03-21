@@ -7,35 +7,37 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'planta', names: { es: 'Planta' } },
   { id: 'arbusto', names: { es: 'Arbusto' } },
   { id: 'aguila', names: { es: '\u00C1guila' } },
+  { id: 'bebe', names: { es: 'Beb\u00E9' } },
+  { id: 'solcito', names: { es: 'Solcito' } },
 ];
 
 export function buildConfiguredDeck(): Card[] {
   const deck: Card[] = [];
-  let copyNumber = 1;
 
-  while (deck.length < GAME_CONFIG.initialDeckSize) {
-    for (const definition of CARD_DEFINITIONS) {
-      if (copyNumber > GAME_CONFIG.copiesPerCardType) {
-        break;
-      }
-
+  for (const definition of CARD_DEFINITIONS) {
+    for (let copyNumber = 1; copyNumber <= GAME_CONFIG.copiesPerCardType; copyNumber += 1) {
       deck.push({
         id: `${definition.id}-${copyNumber}`,
         type: definition.id,
       });
-
-      if (deck.length === GAME_CONFIG.initialDeckSize) {
-        return deck;
-      }
     }
+  }
 
-    copyNumber += 1;
+  for (let index = deck.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    const currentCard = deck[index];
+    deck[index] = deck[randomIndex];
+    deck[randomIndex] = currentCard;
   }
 
   return deck;
 }
 
 export function getCardLabel(card: Card) {
+  if (card.type === 'solcito' && card.sourcePlayerId) {
+    return `Solcito P${card.sourcePlayerId}`;
+  }
+
   return (
     CARD_DEFINITIONS.find((definition) => definition.id === card.type)?.names.es
       ?? card.type
@@ -43,9 +45,9 @@ export function getCardLabel(card: Card) {
 }
 
 export function canCardProtect(card: Card) {
-  return card.type !== 'aguila';
+  return card.type !== 'aguila' && card.type !== 'bebe' && card.type !== 'solcito';
 }
 
 export function canCardBePlayed(card: Card) {
-  return card.type === 'aguila';
+  return card.type === 'aguila' || card.type === 'bebe' || card.type === 'solcito';
 }
