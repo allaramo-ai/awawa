@@ -1,26 +1,55 @@
+import { RefObject } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { getCardLabel } from '../game/cards';
+import { Card } from '../game/types';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
+type SlotRef = RefObject<View | null>;
+
 type AwawaSlotsProps = {
-  slots: number;
+  protections: Array<Card | null>;
+  slotRefs: SlotRef[];
+  onSlotLayout: (slotIndex: number) => void;
 };
 
-export function AwawaSlots({ slots }: AwawaSlotsProps) {
+export function AwawaSlots({
+  protections,
+  slotRefs,
+  onSlotLayout,
+}: AwawaSlotsProps) {
   return (
     <View style={styles.container}>
-      {Array.from({ length: slots }, (_, index) => (
-        <View key={index} style={styles.slot}>
-          <Text style={styles.label}>Awawa</Text>
-        </View>
-      ))}
+      <View style={styles.row}>
+        {protections.map((card, index) => (
+          <View
+            key={`protection-${index}`}
+            ref={slotRefs[index]}
+            onLayout={() => onSlotLayout(index)}
+            style={styles.slot}
+          >
+            <Text style={styles.label}>{card ? getCardLabel(card) : ''}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.row}>
+        {protections.map((_, index) => (
+          <View key={`awawa-${index}`} style={styles.slot}>
+            <Text style={styles.label}>Awawa</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    gap: spacing.xs,
+  },
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: spacing.xs,

@@ -20,6 +20,7 @@ export type Card = {
 export type PlayerState = {
   id: number;
   hand: Card[];
+  protections: Array<Card | null>;
   hasDrawnThisTurn: boolean;
 };
 
@@ -29,5 +30,7 @@ export type GameState = {
   players: PlayerState[];
   currentPlayerIndex: number;
   drawPile: Card[];
+  selectedCardId: string | null;
+  lastActionText: string | null;
   status: GameStatus;
 };

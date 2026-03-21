@@ -6,7 +6,7 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'cueva', names: { es: 'Cueva' } },
   { id: 'planta', names: { es: 'Planta' } },
   { id: 'arbusto', names: { es: 'Arbusto' } },
-  { id: 'aguila', names: { es: 'Águila' } },
+  { id: 'aguila', names: { es: '\u00C1guila' } },
 ];
 
 export function buildConfiguredDeck(): Card[] {
@@ -40,4 +40,12 @@ export function getCardLabel(card: Card) {
     CARD_DEFINITIONS.find((definition) => definition.id === card.type)?.names.es
       ?? card.type
   );
+}
+
+export function canCardProtect(card: Card) {
+  return card.type !== 'aguila';
+}
+
+export function canCardBePlayed(card: Card) {
+  return card.type === 'aguila';
 }

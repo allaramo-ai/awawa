@@ -3,10 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 
 import {
   canDrawCard,
+  canPlaySelectedCard,
   createGameState,
   drawCard as drawGameCard,
   finishTurn as finishGameTurn,
   getCurrentPlayer,
+  placeCardInProtection,
+  playSelectedCard,
+  selectCard,
 } from './src/game/gameState';
 import { GameState } from './src/game/types';
 import { GameScreen } from './src/screens/GameScreen';
@@ -35,6 +39,26 @@ export default function App() {
     setGameState(null);
   };
 
+  const handleSelectCard = (cardId: string) => {
+    setGameState((currentState) =>
+      currentState ? selectCard(currentState, cardId) : currentState,
+    );
+  };
+
+  const handlePlayCard = () => {
+    setGameState((currentState) =>
+      currentState ? playSelectedCard(currentState) : currentState,
+    );
+  };
+
+  const handleDropProtection = (cardId: string, slotIndex: number) => {
+    setGameState((currentState) =>
+      currentState
+        ? placeCardInProtection(currentState, cardId, slotIndex)
+        : currentState,
+    );
+  };
+
   if (!gameState) {
     return (
       <>
@@ -55,11 +79,18 @@ export default function App() {
         currentPlayer={currentPlayer.id}
         cardsLeft={gameState.drawPile.length}
         currentHand={currentPlayer.hand}
+        protections={currentPlayer.protections}
+        selectedCardId={gameState.selectedCardId}
         canDraw={canDrawCard(gameState)}
+        canPlay={canPlaySelectedCard(gameState)}
         gameOver={gameOver}
+        lastActionText={gameState.lastActionText}
         onDrawCard={drawCard}
         onFinishTurn={finishTurn}
         onRestart={restartGame}
+        onSelectCard={handleSelectCard}
+        onPlayCard={handlePlayCard}
+        onDropProtection={handleDropProtection}
       />
     </>
   );

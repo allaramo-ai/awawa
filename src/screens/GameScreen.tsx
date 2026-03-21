@@ -1,8 +1,9 @@
+import { createRef, RefObject, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { AwawaSlots } from '../components/AwawaSlots';
 import { DeckIndicator } from '../components/DeckIndicator';
-import { PlayerHand } from '../components/PlayerHand';
+import { DropZone, PlayerHand } from '../components/PlayerHand';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GAME_CONFIG } from '../constants/game';
 import { Card } from '../game/types';
@@ -14,11 +15,18 @@ type GameScreenProps = {
   currentPlayer: number;
   cardsLeft: number;
   currentHand: Card[];
+  protections: Array<Card | null>;
+  selectedCardId: string | null;
   canDraw: boolean;
+  canPlay: boolean;
   gameOver: boolean;
+  lastActionText: string | null;
   onDrawCard: () => void;
   onFinishTurn: () => void;
   onRestart: () => void;
+  onSelectCard: (cardId: string) => void;
+  onPlayCard: () => void;
+  onDropProtection: (cardId: string, slotIndex: number) => void;
 };
 
 export function GameScreen({
@@ -26,12 +34,45 @@ export function GameScreen({
   currentPlayer,
   cardsLeft,
   currentHand,
+  protections,
+  selectedCardId,
   canDraw,
+  canPlay,
   gameOver,
+  lastActionText,
   onDrawCard,
   onFinishTurn,
   onRestart,
+  onSelectCard,
+  onPlayCard,
+  onDropProtection,
 }: GameScreenProps) {
+  const slotRefs = useMemo(
+    () =>
+      Array.from({ length: GAME_CONFIG.awawaSlots }, () =>
+        createRef<View>() as RefObject<View | null>,
+      ),
+    [],
+  );
+  const [dropZones, setDropZones] = useState<DropZone[]>([]);
+
+  const handleSlotLayout = (slotIndex: number) => {
+    const slotRef = slotRefs[slotIndex];
+
+    slotRef.current?.measureInWindow((x, y, width, height) => {
+      setDropZones((currentZones) => {
+        const nextZone = { slotIndex, x, y, width, height };
+        const remainingZones = currentZones.filter(
+          (zone) => zone.slotIndex !== slotIndex,
+        );
+
+        return [...remainingZones, nextZone].sort(
+          (left, right) => left.slotIndex - right.slotIndex,
+        );
+      });
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -40,7 +81,14 @@ export function GameScreen({
             <Text style={styles.turnLabel}>Turn of Player {currentPlayer}</Text>
             <Text style={styles.turnMeta}>{playerCount} players in this game</Text>
           </View>
-          <DeckIndicator cardsLeft={cardsLeft} />
+          <View style={styles.deckBlock}>
+            <DeckIndicator cardsLeft={cardsLeft} />
+            <PrimaryButton
+              label="Draw"
+              onPress={onDrawCard}
+              disabled={gameOver || !canDraw}
+            />
+          </View>
         </View>
 
         <View style={styles.centerContent}>
@@ -56,8 +104,22 @@ export function GameScreen({
             </View>
           ) : (
             <View style={styles.playArea}>
-              <PlayerHand cards={currentHand} />
-              <AwawaSlots slots={GAME_CONFIG.awawaSlots} />
+              <PlayerHand
+                cards={currentHand}
+                selectedCardId={selectedCardId}
+                dropZones={dropZones}
+                onSelectCard={onSelectCard}
+                onDropProtection={onDropProtection}
+              />
+              <AwawaSlots
+                protections={protections}
+                slotRefs={slotRefs}
+                onSlotLayout={handleSlotLayout}
+              />
+              <Text style={styles.actionText}>
+                {lastActionText ??
+                  'Select \u00C1guila to play it, or drag another card into a protection slot.'}
+              </Text>
             </View>
           )}
         </View>
@@ -66,9 +128,9 @@ export function GameScreen({
           <View style={styles.buttonRow}>
             <View style={styles.buttonWrap}>
               <PrimaryButton
-                label="Draw 1 card"
-                onPress={onDrawCard}
-                disabled={gameOver || !canDraw}
+                label="Play Card"
+                onPress={onPlayCard}
+                disabled={gameOver || !canPlay}
               />
             </View>
             <View style={styles.buttonWrap}>
@@ -118,6 +180,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  deckBlock: {
+    width: 120,
+    gap: spacing.md,
+  },
   centerContent: {
     flex: 1,
     alignItems: 'center',
@@ -126,7 +192,14 @@ const styles = StyleSheet.create({
   },
   playArea: {
     width: '100%',
-    gap: spacing.xl,
+    gap: spacing.lg,
+  },
+  actionText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    minHeight: 40,
   },
   gameOverCard: {
     width: '100%',
