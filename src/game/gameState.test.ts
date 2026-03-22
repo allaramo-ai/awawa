@@ -223,7 +223,7 @@ describe('gameState', () => {
     );
   });
 
-  it('aguila prioritizes killing the awawa marked by solcito', () => {
+  it('aguila prioritizes killing the awawa marked by solcito and keeps other protections', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
@@ -232,27 +232,36 @@ describe('gameState', () => {
       type: 'solcito',
       sourcePlayerId: 1,
     };
+    state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
 
     const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
 
     expect(afterPlay.players[1].awawas[2]).toBe(false);
+    expect(afterPlay.players[1].protections[0]?.type).toBe('roca');
   });
 
-  it('aguila kills one unprotected awawa of each other player', () => {
-    const state = createGameState(3);
-    state.turnsCompleted = 3;
+  it('aguila kills only the right-side player and removes other protections after an unprotected kill', () => {
+    const state = createGameState(4);
+    state.turnsCompleted = 4;
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
-    state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
-    state.players[1].protections[1] = { id: 'cueva-p2', type: 'cueva' };
+    state.players[1].protections = [
+      null,
+      { id: 'cueva-p2', type: 'cueva' },
+      { id: 'planta-p2', type: 'planta' },
+      { id: 'arbusto-p2', type: 'arbusto' },
+      { id: 'roca-p2', type: 'roca' },
+    ];
     state.players[2].protections[0] = { id: 'roca-p3', type: 'roca' };
     state.players[2].protections[2] = { id: 'planta-p3', type: 'planta' };
+    state.players[3].protections[0] = { id: 'roca-p4', type: 'roca' };
 
     const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
 
     expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(4);
-    expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(4);
+    expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterPlay.players[3].awawas.filter(Boolean)).toHaveLength(5);
     expect(afterPlay.players[1].protections.every((card) => card === null)).toBe(true);
-    expect(afterPlay.players[2].protections.every((card) => card === null)).toBe(true);
+    expect(afterPlay.players[2].protections[0]?.type).toBe('roca');
     expect(afterPlay.players[0].notices.join(' ')).toContain(
       'Your \u00C1guila took one Awawa from P2.',
     );
@@ -309,10 +318,18 @@ describe('gameState', () => {
 
     const afterPlayerOne = playSelectedCard(selectCard(state, 'aguila-p1'));
     const playerTwoTurn = finishTurn(afterPlayerOne);
+
+    expect(playerTwoTurn.players[1].notices).toHaveLength(1);
+
     const afterPlayerTwo = playSelectedCard(selectCard(playerTwoTurn, 'aguila-p2'));
+
+    expect(afterPlayerTwo.players[1].notices).toHaveLength(2);
+    expect(afterPlayerTwo.players[1].notices[0]).toContain("P1's \u00C1guila");
+    expect(afterPlayerTwo.players[1].notices[1]).toContain('Your \u00C1guila');
+
     const playerThreeTurn = finishTurn(afterPlayerTwo);
 
-    expect(playerThreeTurn.players[2].notices).toHaveLength(2);
+    expect(playerThreeTurn.players[1].notices).toHaveLength(0);
   });
 
   it('dismisses the current player notification permanently', () => {

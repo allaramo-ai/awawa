@@ -90,6 +90,18 @@ function getNextActivePlayerIndex(players: PlayerState[], currentIndex: number) 
   return nextIndex ?? activeIndexes[0];
 }
 
+function getRightPlayerIndex(players: PlayerState[], currentIndex: number) {
+  for (let step = 1; step < players.length; step += 1) {
+    const index = (currentIndex + step) % players.length;
+
+    if (getAliveAwawaCount(players[index]) > 0) {
+      return index;
+    }
+  }
+
+  return currentIndex;
+}
+
 function clearAliveProtections(player: PlayerState) {
   return player.protections.map((protection, index) =>
     player.awawas[index] ? null : protection,
@@ -299,25 +311,37 @@ function killOnePreferredAwawa(player: PlayerState) {
         );
 
   if (targetIndex === -1) {
-    return player;
+    return {
+      player,
+      targetType: null as 'solcito' | 'unprotected' | null,
+    };
   }
 
   const awawas = [...player.awawas];
   const protections = [...player.protections];
+  const targetType = solcitoIndex !== -1 ? 'solcito' : 'unprotected';
 
   awawas[targetIndex] = false;
   protections[targetIndex] = null;
 
   return {
-    ...player,
-    awawas,
-    protections,
+    player: {
+      ...player,
+      awawas,
+      protections,
+    },
+    targetType,
   };
 }
 
 function playAguila(state: GameState, selectedCard: Card): GameState {
   const actorId = state.players[state.currentPlayerIndex].id;
   const impactMessages: string[] = [];
+  const targetPlayerIndex = getRightPlayerIndex(
+    state.players,
+    state.currentPlayerIndex,
+  );
+
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex) {
       return {
@@ -327,24 +351,35 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
       };
     }
 
-    const attackedPlayer = killOnePreferredAwawa(player);
+    if (index !== targetPlayerIndex) {
+      return player;
+    }
+
+    const { player: attackedPlayer, targetType } = killOnePreferredAwawa(player);
     const awawaLost =
       getAliveAwawaCount(attackedPlayer) < getAliveAwawaCount(player);
 
     impactMessages.push(
       awawaLost
         ? `Your \u00C1guila took one Awawa from P${player.id}.`
-        : `Your \u00C1guila removed protections from P${player.id}.`,
+        : targetType === 'unprotected'
+          ? `Your \u00C1guila removed protections from P${player.id}.`
+          : `Your \u00C1guila could not reach an unprotected Awawa from P${player.id}.`,
     );
 
     return {
       ...attackedPlayer,
-      protections: clearAliveProtections(attackedPlayer),
+      protections:
+        targetType === 'unprotected'
+          ? clearAliveProtections(attackedPlayer)
+          : attackedPlayer.protections,
       notices: [
         ...attackedPlayer.notices,
         awawaLost
           ? `P${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
-          : `P${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`,
+          : targetType === 'unprotected'
+            ? `P${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`
+            : `P${actorId}'s \u00C1guila could not reach one of your unprotected Awawas.`,
       ],
     };
   });
