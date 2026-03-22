@@ -11,6 +11,7 @@ function createPlayers(playerCount: number): PlayerState[] {
     notices: [],
     hasDrawnThisTurn: false,
     hasPlayedCardThisTurn: false,
+    hasThrownCardThisTurn: false,
   }));
 }
 
@@ -102,6 +103,44 @@ function getRightPlayerIndex(players: PlayerState[], currentIndex: number) {
   return currentIndex;
 }
 
+function getAguilaTargetIndex(state: GameState) {
+  for (let step = 1; step < state.players.length; step += 1) {
+    const index = (state.currentPlayerIndex + step) % state.players.length;
+    const player = state.players[index];
+
+    if (getAliveAwawaCount(player) === 0) {
+      continue;
+    }
+
+    const hasTarget = player.awawas.some(
+      (alive, slotIndex) =>
+        alive &&
+        (player.protections[slotIndex]?.type === 'solcito' ||
+          !player.protections[slotIndex]),
+    );
+
+    if (hasTarget) {
+      return index;
+    }
+  }
+
+  return null;
+}
+
+function getLeftPlayerIndexes(players: PlayerState[], currentIndex: number) {
+  const indexes: number[] = [];
+
+  for (let step = 1; step < players.length; step += 1) {
+    const index = (currentIndex - step + players.length) % players.length;
+
+    if (getAliveAwawaCount(players[index]) > 0) {
+      indexes.push(index);
+    }
+  }
+
+  return indexes;
+}
+
 function clearAliveProtections(player: PlayerState) {
   return player.protections.map((protection, index) =>
     player.awawas[index] ? null : protection,
@@ -155,11 +194,70 @@ function canPlayElefante(state: GameState, player: PlayerState) {
   );
 }
 
-function clearElefanteProtections(player: PlayerState) {
+function getGritarTarget(state: GameState) {
+  const leftIndexes = getLeftPlayerIndexes(
+    state.players,
+    state.currentPlayerIndex,
+  );
+
+  for (const playerIndex of leftIndexes) {
+    const slotIndex = state.players[playerIndex].protections.findIndex(
+      (protection, index) =>
+        state.players[playerIndex].awawas[index] &&
+        !!protection &&
+        protection.type !== 'elefante' &&
+        protection.type !== 'solcito',
+    );
+
+    if (slotIndex !== -1) {
+      return { playerIndex, slotIndex };
+    }
+  }
+
+  return null;
+}
+
+function canPlayGritar(state: GameState, player: PlayerState) {
+  return !player.hasPlayedCardThisTurn && !!getGritarTarget(state);
+}
+
+function getReyTargetIndex(state: GameState) {
+  const currentPlayer = getCurrentPlayer(state);
+  const currentAwawas = getAliveAwawaCount(currentPlayer);
+  let highestCount = currentAwawas;
+  let targetIndex: number | null = null;
+
+  for (let step = 1; step < state.players.length; step += 1) {
+    const index = (state.currentPlayerIndex + step) % state.players.length;
+    const awawaCount = getAliveAwawaCount(state.players[index]);
+
+    if (awawaCount > highestCount) {
+      highestCount = awawaCount;
+      targetIndex = index;
+    }
+  }
+
+  return targetIndex;
+}
+
+function canPlayRey(state: GameState, player: PlayerState) {
+  return (
+    !player.hasPlayedCardThisTurn &&
+    getAliveAwawaCount(player) < GAME_CONFIG.awawaSlots &&
+    getMissingAwawaSlotIndex(player) !== -1 &&
+    getReyTargetIndex(state) !== null
+  );
+}
+
+function clearTemporaryProtections(player: PlayerState) {
   return {
     ...player,
     protections: player.protections.map((protection) =>
-      protection?.type === 'elefante' ? null : protection,
+      protection?.type === 'elefante' ||
+      protection?.type === 'correr' ||
+      protection?.type === 'solcito'
+        ? null
+        : protection,
     ),
   };
 }
@@ -227,6 +325,18 @@ export function canDrawCard(state: GameState) {
     getAliveAwawaCount(player) > 0 &&
     player.hand.length < GAME_CONFIG.maxHandSize &&
     !player.hasDrawnThisTurn
+  );
+}
+
+export function canThrowSelectedCard(state: GameState) {
+  const currentPlayer = getCurrentPlayer(state);
+  const selectedCard = getSelectedCard(state);
+
+  return (
+    state.status === 'playing' &&
+    !!selectedCard &&
+    currentPlayer.hand.length > 0 &&
+    !currentPlayer.hasThrownCardThisTurn
   );
 }
 
@@ -314,6 +424,14 @@ export function canPlaySelectedCard(state: GameState) {
     return canPlayElefante(state, currentPlayer);
   }
 
+  if (selectedCard.type === 'gritar') {
+    return canPlayGritar(state, currentPlayer);
+  }
+
+  if (selectedCard.type === 'rey') {
+    return canPlayRey(state, currentPlayer);
+  }
+
   return false;
 }
 
@@ -357,10 +475,7 @@ function killOnePreferredAwawa(player: PlayerState) {
 function playAguila(state: GameState, selectedCard: Card): GameState {
   const actorId = state.players[state.currentPlayerIndex].id;
   const impactMessages: string[] = [];
-  const targetPlayerIndex = getRightPlayerIndex(
-    state.players,
-    state.currentPlayerIndex,
-  );
+  const targetPlayerIndex = getAguilaTargetIndex(state);
 
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex) {
@@ -405,7 +520,12 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
   });
 
   const resolved = getResolvedGameStatus(state.drawPile, players);
-  const actorMessages = resolved.status === 'game_over' ? [] : impactMessages;
+  const actorMessages =
+    resolved.status === 'game_over'
+      ? []
+      : impactMessages.length > 0
+        ? impactMessages
+        : ['Your Águila could not reach any unprotected Awawa.'];
 
   return {
     ...state,
@@ -421,6 +541,31 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
+  };
+}
+
+export function throwSelectedCard(state: GameState): GameState {
+  const selectedCard = getSelectedCard(state);
+
+  if (!selectedCard || !canThrowSelectedCard(state)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) =>
+    index === state.currentPlayerIndex
+      ? {
+          ...player,
+          hand: player.hand.filter((card) => card.id !== selectedCard.id),
+          hasThrownCardThisTurn: true,
+        }
+      : player,
+  );
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    lastActionText: null,
   };
 }
 
@@ -558,6 +703,109 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
   };
 }
 
+function playGritar(state: GameState, selectedCard: Card): GameState {
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const target = getGritarTarget(state);
+
+  if (!target) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        hasPlayedCardThisTurn: true,
+        notices: [...player.notices, `Your Gritar removed one protection from P${state.players[target.playerIndex].id}.`],
+      };
+    }
+
+    if (index !== target.playerIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[target.slotIndex] = null;
+
+    return {
+      ...player,
+      protections,
+      notices: [...player.notices, `P${actorId}'s Gritar removed one of your protections.`],
+    };
+  });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+function playRey(state: GameState, selectedCard: Card): GameState {
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const currentPlayer = getCurrentPlayer(state);
+  const targetIndex = getReyTargetIndex(state);
+  const missingSlotIndex = getMissingAwawaSlotIndex(currentPlayer);
+
+  if (targetIndex === null || missingSlotIndex === -1) {
+    return state;
+  }
+
+  const stolenSlotIndex = state.players[targetIndex].awawas.findIndex(Boolean);
+
+  if (stolenSlotIndex === -1) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      const awawas = [...player.awawas];
+      awawas[missingSlotIndex] = true;
+
+      return {
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        awawas,
+        hasPlayedCardThisTurn: true,
+        notices: [...player.notices, `Your Rey stole one Awawa from P${state.players[targetIndex].id}.`],
+      };
+    }
+
+    if (index !== targetIndex) {
+      return player;
+    }
+
+    const awawas = [...player.awawas];
+    const protections = [...player.protections];
+    awawas[stolenSlotIndex] = false;
+    protections[stolenSlotIndex] = null;
+
+    return {
+      ...player,
+      awawas,
+      protections,
+      notices: [...player.notices, `P${actorId}'s Rey stole one of your Awawas.`],
+    };
+  });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
 export function playSelectedCard(state: GameState): GameState {
   const selectedCard = getSelectedCard(state);
 
@@ -583,6 +831,14 @@ export function playSelectedCard(state: GameState): GameState {
 
   if (selectedCard.type === 'elefante') {
     return playElefante(state, selectedCard);
+  }
+
+  if (selectedCard.type === 'gritar') {
+    return playGritar(state, selectedCard);
+  }
+
+  if (selectedCard.type === 'rey') {
+    return playRey(state, selectedCard);
   }
 
   return state;
@@ -644,13 +900,14 @@ export function finishTurn(state: GameState): GameState {
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex || index === nextPlayerIndex) {
       const nextPlayer =
-        index === nextPlayerIndex ? clearElefanteProtections(player) : player;
+        index === nextPlayerIndex ? clearTemporaryProtections(player) : player;
 
       return {
         ...nextPlayer,
         notices: index === state.currentPlayerIndex ? [] : nextPlayer.notices,
         hasDrawnThisTurn: false,
         hasPlayedCardThisTurn: false,
+        hasThrownCardThisTurn: false,
       };
     }
 

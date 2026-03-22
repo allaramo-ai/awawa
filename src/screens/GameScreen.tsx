@@ -24,12 +24,14 @@ type GameScreenProps = {
   currentHand: Card[];
   selectedCardId: string | null;
   canDraw: boolean;
+  canThrow: boolean;
   canPlay: boolean;
   gameOver: boolean;
   notificationMessages: string[];
   resultText: string | null;
   onDismissNotification: () => void;
   onDrawCard: () => void;
+  onThrowCard: () => void;
   onFinishTurn: () => void;
   onRestart: () => void;
   onSelectCard: (cardId: string) => void;
@@ -46,12 +48,14 @@ export function GameScreen({
   currentHand,
   selectedCardId,
   canDraw,
+  canThrow,
   canPlay,
   gameOver,
   notificationMessages,
   resultText,
   onDismissNotification,
   onDrawCard,
+  onThrowCard,
   onFinishTurn,
   onRestart,
   onSelectCard,
@@ -162,6 +166,13 @@ export function GameScreen({
               onPress={onDrawCard}
               disabled={gameOver || !canDraw}
               size="compact"
+            />
+            <PrimaryButton
+              label="Throw Card"
+              onPress={onThrowCard}
+              disabled={gameOver || !canThrow}
+              size="compact"
+              variant="outline"
             />
           </View>
         </View>

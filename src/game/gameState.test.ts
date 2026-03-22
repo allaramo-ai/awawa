@@ -2,6 +2,7 @@ import { GAME_CONFIG } from '../constants/game';
 import {
   canDrawCard,
   canPlaySelectedCard,
+  canThrowSelectedCard,
   createGameState,
   dismissCurrentNotification,
   drawCard,
@@ -10,6 +11,7 @@ import {
   placeCardInProtection,
   playSelectedCard,
   selectCard,
+  throwSelectedCard,
 } from './gameState';
 
 describe('gameState', () => {
@@ -48,6 +50,34 @@ describe('gameState', () => {
     expect(afterSecondDraw).toBe(afterFirstDraw);
   });
 
+  it('allows throwing one selected card per turn and clears the selection', () => {
+    const state = createGameState(1);
+    state.players[0].hand = [
+      { id: 'roca-x', type: 'roca' },
+      { id: 'cueva-x', type: 'cueva' },
+    ];
+
+    const selectedState = selectCard(state, 'roca-x');
+    const afterThrow = throwSelectedCard(selectedState);
+    const afterSelectingAgain = selectCard(afterThrow, 'cueva-x');
+    const secondThrowAttempt = throwSelectedCard(afterSelectingAgain);
+
+    expect(canThrowSelectedCard(selectedState)).toBe(true);
+    expect(afterThrow.players[0].hand).toEqual([{ id: 'cueva-x', type: 'cueva' }]);
+    expect(afterThrow.selectedCardId).toBeNull();
+    expect(afterThrow.players[0].hasThrownCardThisTurn).toBe(true);
+    expect(canThrowSelectedCard(afterSelectingAgain)).toBe(false);
+    expect(secondThrowAttempt).toBe(afterSelectingAgain);
+  });
+
+  it('does not allow throwing without a selected card or when the hand is empty', () => {
+    const state = createGameState(1);
+    state.players[0].hand = [];
+
+    expect(canThrowSelectedCard(state)).toBe(false);
+    expect(throwSelectedCard(state)).toBe(state);
+  });
+
   it('keeps the game alive when the last card is drawn and ends it on the next draw attempt', () => {
     const state = createGameState(2);
     state.players[0].hand = state.players[0].hand.slice(0, 2);
@@ -82,7 +112,9 @@ describe('gameState', () => {
         card.type !== 'aguila' &&
         card.type !== 'bebe' &&
         card.type !== 'solcito' &&
-        card.type !== 'elefante',
+        card.type !== 'elefante' &&
+        card.type !== 'gritar' &&
+        card.type !== 'rey',
     );
 
     expect(protectionCard).toBeDefined();
@@ -111,10 +143,18 @@ describe('gameState', () => {
     const elefanteState = createGameState(1);
     elefanteState.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
 
+    const gritarState = createGameState(1);
+    gritarState.players[0].hand = [{ id: 'gritar-x', type: 'gritar' }];
+
+    const reyState = createGameState(1);
+    reyState.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
+
     expect(placeCardInProtection(aguilaState, 'aguila-x', 0)).toBe(aguilaState);
     expect(placeCardInProtection(bebeState, 'bebe-x', 0)).toBe(bebeState);
     expect(placeCardInProtection(solcitoState, 'solcito-x', 0)).toBe(solcitoState);
     expect(placeCardInProtection(elefanteState, 'elefante-x', 0)).toBe(elefanteState);
+    expect(placeCardInProtection(gritarState, 'gritar-x', 0)).toBe(gritarState);
+    expect(placeCardInProtection(reyState, 'rey-x', 0)).toBe(reyState);
   });
 
   it('does not allow aguila to be played in the first round', () => {
@@ -228,6 +268,18 @@ describe('gameState', () => {
     );
   });
 
+  it('solcito disappears when the targeted player next turn starts', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'solcito-x', type: 'solcito' }];
+
+    const afterPlay = playSelectedCard(selectCard(state, 'solcito-x'));
+    const playerTwoTurn = finishTurn(afterPlay);
+
+    expect(afterPlay.players[1].protections[0]?.type).toBe('solcito');
+    expect(playerTwoTurn.players[1].protections[0]).toBeNull();
+  });
+
   it('elefante replaces every alive protection slot and removes existing protections and solcitos', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
@@ -244,6 +296,96 @@ describe('gameState', () => {
 
     expect(afterPlay.players[0].protections.every((card) => card?.type === 'elefante')).toBe(true);
     expect(afterPlay.players[0].hasPlayedCardThisTurn).toBe(true);
+  });
+
+  it('correr protects an awawa for one round and disappears on that player next turn', () => {
+    const state = createGameState(2);
+    state.players[0].hand = [{ id: 'correr-x', type: 'correr' }];
+
+    const afterPlacement = placeCardInProtection(state, 'correr-x', 0);
+    const playerTwoTurn = finishTurn(afterPlacement);
+    const playerOneTurnAgain = finishTurn(playerTwoTurn);
+
+    expect(afterPlacement.players[0].protections[0]?.type).toBe('correr');
+    expect(playerOneTurnAgain.players[0].protections[0]).toBeNull();
+  });
+
+  it('gritar can be played only if a left-side player has a removable protection', () => {
+    const enabledState = createGameState(3);
+    enabledState.turnsCompleted = 2;
+    enabledState.players[0].hand = [{ id: 'gritar-x', type: 'gritar' }];
+    enabledState.players[2].protections[0] = { id: 'roca-p3', type: 'roca' };
+
+    const disabledState = createGameState(3);
+    disabledState.turnsCompleted = 2;
+    disabledState.players[0].hand = [{ id: 'gritar-x', type: 'gritar' }];
+    disabledState.players[2].protections[0] = {
+      id: 'solcito-p3',
+      type: 'solcito',
+      sourcePlayerId: 2,
+    };
+    disabledState.players[2].protections[1] = { id: 'elefante-p3', type: 'elefante' };
+
+    expect(canPlaySelectedCard(selectCard(enabledState, 'gritar-x'))).toBe(true);
+    expect(canPlaySelectedCard(selectCard(disabledState, 'gritar-x'))).toBe(false);
+  });
+
+  it('gritar removes the closest left removable protection and skips protected-only players', () => {
+    const state = createGameState(4);
+    state.turnsCompleted = 4;
+    state.players[0].hand = [{ id: 'gritar-x', type: 'gritar' }];
+    state.players[3].protections[0] = {
+      id: 'solcito-p4',
+      type: 'solcito',
+      sourcePlayerId: 2,
+    };
+    state.players[2].protections[1] = { id: 'roca-p3', type: 'roca' };
+
+    const afterPlay = playSelectedCard(selectCard(state, 'gritar-x'));
+
+    expect(afterPlay.players[3].protections[0]?.type).toBe('solcito');
+    expect(afterPlay.players[2].protections[1]).toBeNull();
+    expect(afterPlay.players[0].notices.join(' ')).toContain(
+      'Your Gritar removed one protection from P3.',
+    );
+  });
+
+  it('rey can be played only if the player is missing an awawa and another player has more', () => {
+    const enabledState = createGameState(3);
+    enabledState.turnsCompleted = 2;
+    enabledState.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
+    enabledState.players[0].awawas = [true, true, true, false, true];
+
+    const disabledState = createGameState(3);
+    disabledState.turnsCompleted = 2;
+    disabledState.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
+    disabledState.players[0].awawas = [true, true, true, false, true];
+    disabledState.players[1].awawas = [true, true, true, false, true];
+    disabledState.players[2].awawas = [true, true, true, false, true];
+
+    expect(canPlaySelectedCard(selectCard(enabledState, 'rey-x'))).toBe(true);
+    expect(canPlaySelectedCard(selectCard(disabledState, 'rey-x'))).toBe(false);
+  });
+
+  it('rey steals one awawa from the highest-count player closest to the right and drops their protection', () => {
+    const state = createGameState(4);
+    state.turnsCompleted = 4;
+    state.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
+    state.players[0].awawas = [true, false, true, true, true];
+    state.players[1].awawas = [true, true, true, true, true];
+    state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
+    state.players[3].awawas = [true, true, true, true, true];
+    state.players[3].protections[0] = { id: 'planta-p4', type: 'planta' };
+
+    const afterPlay = playSelectedCard(selectCard(state, 'rey-x'));
+
+    expect(afterPlay.players[0].awawas).toEqual([true, true, true, true, true]);
+    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(4);
+    expect(afterPlay.players[1].protections[0]).toBeNull();
+    expect(afterPlay.players[3].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterPlay.players[0].notices.join(' ')).toContain(
+      'Your Rey stole one Awawa from P2.',
+    );
   });
 
   it('aguila prioritizes killing the awawa marked by solcito and keeps other protections', () => {
@@ -277,7 +419,27 @@ describe('gameState', () => {
     expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(5);
     expect(afterPlay.players[1].protections.every((card) => card?.type === 'elefante')).toBe(true);
     expect(afterPlay.players[0].notices.join(' ')).toContain(
-      'could not reach an unprotected Awawa from P2.',
+      'could not reach any unprotected Awawa.',
+    );
+  });
+
+  it('aguila skips a fully protected right player and attacks the next valid player on the right', () => {
+    const state = createGameState(3);
+    state.turnsCompleted = 3;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+    state.players[1].protections = state.players[1].protections.map((_, index) => ({
+      id: `elefante-p2-${index}`,
+      type: 'elefante',
+    }));
+    state.players[2].protections[0] = null;
+    state.players[2].protections[1] = { id: 'roca-p3', type: 'roca' };
+
+    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+
+    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(4);
+    expect(afterPlay.players[0].notices.join(' ')).toContain(
+      'Your Águila took one Awawa from P3.',
     );
   });
 

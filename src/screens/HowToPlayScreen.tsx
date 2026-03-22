@@ -11,12 +11,15 @@ type HowToPlayScreenProps = {
 const rules = [
   'Pick 1 to 4 players, then start the game.',
   'Each player begins with 5 Awawa slots, 3 cards in hand, and shared access to the deck and Colonia.',
-  'On your turn you can draw once if your hand has fewer than 3 cards, play one playable card, place one protection card, and then finish your turn.',
+  'On your turn you can draw once if your hand has fewer than 3 cards, throw one selected card, play one playable card, place one protection card, and then finish your turn.',
   'Protection cards can be dragged onto your protection row above each Awawa slot.',
-  'Aguila attacks only the player to your right. It prefers an Awawa marked by Solcito. If it kills an unprotected Awawa, the rest of that player protections are removed.',
+  'Aguila attacks to the right. It prefers an Awawa marked by Solcito, otherwise an unprotected Awawa, and it can skip fully protected players until it finds a valid target.',
   'Bebe restores one missing Awawa if you have space and Colonia still has stock.',
-  'Solcito lands on the next player board with an empty protection slot and marks that Awawa as a priority target.',
+  'Solcito lands on the next player board with an empty protection slot, marks that Awawa as a priority target, and disappears when that player next turn starts.',
+  'Correr is a temporary protection card. It blocks Aguila for one round and disappears when your next turn starts.',
   'Elefante covers all of your alive protection slots, replaces any card already there, and blocks Aguila until your next turn starts.',
+  'Gritar removes one removable protection from the closest player to your left who has one. It cannot remove Elefante or Solcito.',
+  'Rey can be played only if you have fewer than 5 Awawas. It steals one Awawa from the player with the most Awawas, breaking ties by choosing the closest player to your right.',
   'A player with no Awawas left is out. The game ends when one player remains or the deck is exhausted.',
 ];
 

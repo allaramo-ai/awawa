@@ -5,7 +5,7 @@ export const PLAYER_COUNT = {
 } as const;
 
 export const GAME_CONFIG = {
-  initialDeckSize: 40,
+  initialDeckSize: 55,
   initialColonySize: 10,
   awawaSlots: 5,
   initialHandSize: 3,

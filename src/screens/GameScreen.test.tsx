@@ -71,12 +71,14 @@ const baseProps = {
   currentHand: [{ id: 'aguila-1', type: 'aguila' as const }],
   selectedCardId: null,
   canDraw: true,
+  canThrow: false,
   canPlay: true,
   gameOver: false,
   notificationMessages: ['P2 did something important.'],
   resultText: null,
   onDismissNotification: noop,
   onDrawCard: noop,
+  onThrowCard: noop,
   onFinishTurn: noop,
   onRestart: noop,
   onSelectCard: noop,
@@ -192,6 +194,30 @@ describe('GameScreen', () => {
 
     expect(findHostNodesByTestId(tree, 'peek-board-header')).toHaveLength(0);
     expect(findHostNodesByTestId(tree, 'current-player-hand')).toHaveLength(1);
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('shows the throw card button and disables it when no selected card can be thrown', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(<GameScreen {...baseProps} />);
+    });
+
+    const throwButton = tree.root.findByProps({ label: 'Throw Card' });
+
+    expect(throwButton.props.disabled).toBe(true);
+
+    act(() => {
+      tree.update(<GameScreen {...baseProps} canThrow={true} selectedCardId="aguila-1" />);
+    });
+
+    const enabledThrowButton = tree.root.findByProps({ label: 'Throw Card' });
+
+    expect(enabledThrowButton.props.disabled).toBe(false);
 
     act(() => {
       tree.unmount();

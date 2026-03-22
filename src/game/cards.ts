@@ -10,6 +10,9 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'bebe', names: { es: 'Beb\u00E9' } },
   { id: 'solcito', names: { es: 'Solcito' } },
   { id: 'elefante', names: { es: 'Elefante' } },
+  { id: 'correr', names: { es: 'Correr' } },
+  { id: 'gritar', names: { es: 'Gritar' } },
+  { id: 'rey', names: { es: 'Rey' } },
 ];
 
 export function buildConfiguredDeck(): Card[] {
@@ -50,7 +53,9 @@ export function canCardProtect(card: Card) {
     card.type !== 'aguila' &&
     card.type !== 'bebe' &&
     card.type !== 'solcito' &&
-    card.type !== 'elefante'
+    card.type !== 'elefante' &&
+    card.type !== 'gritar' &&
+    card.type !== 'rey'
   );
 }
 
@@ -59,6 +64,8 @@ export function canCardBePlayed(card: Card) {
     card.type === 'aguila' ||
     card.type === 'bebe' ||
     card.type === 'solcito' ||
-    card.type === 'elefante'
+    card.type === 'elefante' ||
+    card.type === 'gritar' ||
+    card.type === 'rey'
   );
 }

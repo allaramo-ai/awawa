@@ -8,7 +8,10 @@ export type CardTypeId =
   | 'aguila'
   | 'bebe'
   | 'solcito'
-  | 'elefante';
+  | 'elefante'
+  | 'correr'
+  | 'gritar'
+  | 'rey';
 
 export type CardDefinition = {
   id: CardTypeId;
@@ -29,6 +32,7 @@ export type PlayerState = {
   notices: string[];
   hasDrawnThisTurn: boolean;
   hasPlayedCardThisTurn: boolean;
+  hasThrownCardThisTurn: boolean;
 };
 
 export type GameStatus = 'playing' | 'game_over';

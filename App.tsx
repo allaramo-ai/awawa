@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import {
   canDrawCard,
+  canThrowSelectedCard,
   canPlaySelectedCard,
   createGameState,
   dismissCurrentNotification,
@@ -12,6 +13,7 @@ import {
   placeCardInProtection,
   playSelectedCard,
   selectCard,
+  throwSelectedCard as throwGameCard,
 } from './src/game/gameState';
 import { GameState } from './src/game/types';
 import { GameScreen } from './src/screens/GameScreen';
@@ -53,6 +55,12 @@ export default function App() {
   const handlePlayCard = () => {
     setGameState((currentState) =>
       currentState ? playSelectedCard(currentState) : currentState,
+    );
+  };
+
+  const handleThrowCard = () => {
+    setGameState((currentState) =>
+      currentState ? throwGameCard(currentState) : currentState,
     );
   };
 
@@ -111,12 +119,14 @@ export default function App() {
         currentHand={currentPlayer.hand}
         selectedCardId={gameState.selectedCardId}
         canDraw={canDrawCard(gameState)}
+        canThrow={canThrowSelectedCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}
         gameOver={gameOver}
         notificationMessages={notificationMessages}
         resultText={gameState.resultText}
         onDismissNotification={handleDismissNotification}
         onDrawCard={drawCard}
+        onThrowCard={handleThrowCard}
         onFinishTurn={finishTurn}
         onRestart={restartGame}
         onSelectCard={handleSelectCard}
