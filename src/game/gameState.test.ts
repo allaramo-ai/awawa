@@ -81,7 +81,8 @@ describe('gameState', () => {
       (card) =>
         card.type !== 'aguila' &&
         card.type !== 'bebe' &&
-        card.type !== 'solcito',
+        card.type !== 'solcito' &&
+        card.type !== 'elefante',
     );
 
     expect(protectionCard).toBeDefined();

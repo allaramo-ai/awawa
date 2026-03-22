@@ -14,11 +14,14 @@ import { spacing } from '../theme/spacing';
 type GameScreenProps = {
   playerCount: number;
   currentPlayer: number;
+  playerBoards: Array<{
+    id: number;
+    protections: Array<Card | null>;
+    awawas: boolean[];
+  }>;
   cardsLeft: number;
   colonyCount: number;
   currentHand: Card[];
-  protections: Array<Card | null>;
-  awawas: boolean[];
   selectedCardId: string | null;
   canDraw: boolean;
   canPlay: boolean;
@@ -37,11 +40,10 @@ type GameScreenProps = {
 export function GameScreen({
   playerCount,
   currentPlayer,
+  playerBoards,
   cardsLeft,
   colonyCount,
   currentHand,
-  protections,
-  awawas,
   selectedCardId,
   canDraw,
   canPlay,
@@ -64,9 +66,14 @@ export function GameScreen({
     [],
   );
   const [dropZones, setDropZones] = useState<DropZone[]>([]);
+  const [peekPlayerId, setPeekPlayerId] = useState<number | null>(null);
   const defaultMessage = 'Protect your Awawas or play a card.';
   const activeNotification = notificationMessages[0] ?? defaultMessage;
   const hasDismissibleNotification = notificationMessages.length > 0;
+  const visiblePlayerId = peekPlayerId ?? currentPlayer;
+  const visibleBoard =
+    playerBoards.find((player) => player.id === visiblePlayerId) ?? playerBoards[0];
+  const isPeeking = peekPlayerId !== null;
 
   const measureSlot = (slotIndex: number) => {
     const slotRef = slotRefs[slotIndex];
@@ -97,7 +104,7 @@ export function GameScreen({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [currentPlayer, activeNotification, awawas, protections, slotRefs]);
+  }, [currentPlayer, activeNotification, visibleBoard, slotRefs]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -106,6 +113,44 @@ export function GameScreen({
           <View style={styles.turnBlock}>
             <Text style={styles.turnLabel}>Turn of Player {currentPlayer}</Text>
             <Text style={styles.turnMeta}>{playerCount} players in this game</Text>
+            <View style={styles.peekRow}>
+              {playerBoards.map((player) => (
+                <Pressable
+                  key={player.id}
+                  disabled={player.id === currentPlayer}
+                  onPressIn={
+                    player.id === currentPlayer
+                      ? undefined
+                      : () => setPeekPlayerId(player.id)
+                  }
+                  onPressOut={
+                    player.id === currentPlayer
+                      ? undefined
+                      : () => setPeekPlayerId(null)
+                  }
+                  onPress={() => undefined}
+                  testID={`peek-button-p${player.id}`}
+                  accessibilityState={{ disabled: player.id === currentPlayer }}
+                  style={({ pressed }) => [
+                    styles.peekButton,
+                    player.id === currentPlayer && styles.peekButtonDisabled,
+                    peekPlayerId === player.id && styles.peekButtonActive,
+                    pressed &&
+                      player.id !== currentPlayer &&
+                      styles.peekButtonPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.peekLabel,
+                      player.id === currentPlayer && styles.peekLabelDisabled,
+                    ]}
+                  >
+                    {`P${player.id}`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
           <View style={styles.sidePanel}>
             <View style={styles.topCounters}>
@@ -134,40 +179,48 @@ export function GameScreen({
             </View>
           ) : (
             <View style={styles.playArea}>
-              <View style={styles.handArea}>
-                <PlayerHand
-                  cards={currentHand}
-                  selectedCardId={selectedCardId}
-                  dropZones={dropZones}
-                  onSelectCard={onSelectCard}
-                  onDropProtection={onDropProtection}
-                />
-              </View>
+              {!isPeeking ? (
+                <View style={styles.handArea} testID="current-player-hand">
+                  <PlayerHand
+                    cards={currentHand}
+                    selectedCardId={selectedCardId}
+                    dropZones={dropZones}
+                    onSelectCard={onSelectCard}
+                    onDropProtection={onDropProtection}
+                  />
+                </View>
+              ) : (
+                <View style={styles.peekHeader} testID="peek-board-header">
+                  <Text style={styles.peekTitle}>{`Viewing P${visibleBoard.id}`}</Text>
+                </View>
+              )}
               <AwawaSlots
-                protections={protections}
-                awawas={awawas}
+                protections={visibleBoard.protections}
+                awawas={visibleBoard.awawas}
                 slotRefs={slotRefs}
                 onSlotLayout={handleSlotLayout}
               />
-              <View style={styles.alertBox}>
-                <View style={styles.alertMessage}>
-                  <Text
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={styles.actionText}
-                  >
-                    {activeNotification}
-                  </Text>
+              {!isPeeking ? (
+                <View style={styles.alertBox} testID="notification-box">
+                  <View style={styles.alertMessage}>
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={styles.actionText}
+                    >
+                      {activeNotification}
+                    </Text>
+                  </View>
+                  {hasDismissibleNotification ? (
+                    <Pressable
+                      onPress={onDismissNotification}
+                      style={styles.closeButton}
+                    >
+                      <Text style={styles.closeLabel}>X</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
-                {hasDismissibleNotification ? (
-                  <Pressable
-                    onPress={onDismissNotification}
-                    style={styles.closeButton}
-                  >
-                    <Text style={styles.closeLabel}>X</Text>
-                  </Pressable>
-                ) : null}
-              </View>
+              ) : null}
             </View>
           )}
         </View>
@@ -228,6 +281,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  peekRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  peekButton: {
+    minWidth: 48,
+    minHeight: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceMuted,
+    paddingHorizontal: spacing.sm,
+  },
+  peekButtonActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.surfaceMuted,
+  },
+  peekButtonDisabled: {
+    opacity: 0.35,
+  },
+  peekButtonPressed: {
+    opacity: 0.85,
+  },
+  peekLabel: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  peekLabelDisabled: {
+    color: colors.textSecondary,
+  },
   sidePanel: {
     width: 188,
     gap: spacing.md,
@@ -249,6 +337,16 @@ const styles = StyleSheet.create({
   },
   handArea: {
     minHeight: 150,
+  },
+  peekHeader: {
+    minHeight: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peekTitle: {
+    color: colors.textSecondary,
+    fontSize: 18,
+    fontWeight: '700',
   },
   actionText: {
     color: colors.textSecondary,

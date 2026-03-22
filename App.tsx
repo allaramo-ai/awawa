@@ -101,11 +101,14 @@ export default function App() {
       <GameScreen
         playerCount={gameState.players.length}
         currentPlayer={currentPlayer.id}
+        playerBoards={gameState.players.map((player) => ({
+          id: player.id,
+          protections: player.protections,
+          awawas: player.awawas,
+        }))}
         cardsLeft={gameState.drawPile.length}
         colonyCount={gameState.colonyCount}
         currentHand={currentPlayer.hand}
-        protections={currentPlayer.protections}
-        awawas={currentPlayer.awawas}
         selectedCardId={gameState.selectedCardId}
         canDraw={canDrawCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}
