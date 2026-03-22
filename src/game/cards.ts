@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../constants/game';
-import { Card, CardDefinition } from './types';
+import { Card, CardDefinition, CardTypeId } from './types';
 
 export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'roca', names: { es: 'Roca' } },
@@ -11,16 +11,37 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'solcito', names: { es: 'Solcito' } },
   { id: 'elefante', names: { es: 'Elefante' } },
   { id: 'correr', names: { es: 'Correr' } },
+  { id: 'awawa', names: { es: 'Awawa' } },
   { id: 'toilet', names: { es: 'Toilet' } },
   { id: 'gritar', names: { es: 'Gritar' } },
   { id: 'rey', names: { es: 'Rey' } },
 ];
 
+export const CARD_COPY_COUNTS: Record<CardTypeId, number> = {
+  roca: GAME_CONFIG.copiesPerCardType,
+  cueva: GAME_CONFIG.copiesPerCardType,
+  planta: GAME_CONFIG.copiesPerCardType,
+  arbusto: GAME_CONFIG.copiesPerCardType,
+  aguila: GAME_CONFIG.copiesPerCardType + GAME_CONFIG.extraAguilaCopies,
+  bebe: GAME_CONFIG.copiesPerCardType,
+  solcito: GAME_CONFIG.copiesPerCardType,
+  elefante: GAME_CONFIG.copiesPerCardType,
+  correr: GAME_CONFIG.copiesPerCardType,
+  awawa: GAME_CONFIG.copiesPerCardType,
+  toilet: GAME_CONFIG.copiesPerCardType,
+  gritar: GAME_CONFIG.copiesPerCardType,
+  rey: GAME_CONFIG.copiesPerCardType,
+};
+
+export function getConfiguredDeckSize() {
+  return Object.values(CARD_COPY_COUNTS).reduce((total, count) => total + count, 0);
+}
+
 export function buildConfiguredDeck(): Card[] {
   const deck: Card[] = [];
 
   for (const definition of CARD_DEFINITIONS) {
-    for (let copyNumber = 1; copyNumber <= GAME_CONFIG.copiesPerCardType; copyNumber += 1) {
+    for (let copyNumber = 1; copyNumber <= CARD_COPY_COUNTS[definition.id]; copyNumber += 1) {
       deck.push({
         id: `${definition.id}-${copyNumber}`,
         type: definition.id,
@@ -41,6 +62,10 @@ export function buildConfiguredDeck(): Card[] {
 export function getCardLabel(card: Card) {
   if (card.type === 'solcito' && card.sourcePlayerId) {
     return `Solcito P${card.sourcePlayerId}`;
+  }
+
+  if (card.type === 'awawa' && card.sourcePlayerId) {
+    return `Awawa P${card.sourcePlayerId}`;
   }
 
   return (

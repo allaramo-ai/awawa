@@ -10,7 +10,7 @@ function createPlayers(playerCount: number): PlayerState[] {
     awawas: Array.from({ length: GAME_CONFIG.awawaSlots }, () => true),
     notices: [],
     hasDrawnThisTurn: false,
-    hasPlayedCardThisTurn: false,
+    playedCardsThisTurn: 0,
     hasThrownCardThisTurn: false,
   }));
 }
@@ -131,7 +131,8 @@ function getAguilaTargetIndex(state: GameState) {
     const hasTarget = player.awawas.some(
       (alive, slotIndex) =>
         alive &&
-        (player.protections[slotIndex]?.type === 'solcito' ||
+        (player.protections[slotIndex]?.type === 'awawa' ||
+          player.protections[slotIndex]?.type === 'solcito' ||
           !player.protections[slotIndex]),
     );
 
@@ -144,6 +145,18 @@ function getAguilaTargetIndex(state: GameState) {
 }
 
 function getAguilaValidSlotIndexes(player: PlayerState) {
+  const awawaIndexes = player.awawas
+    .map((alive, slotIndex) =>
+      alive && player.protections[slotIndex]?.type === 'awawa'
+        ? slotIndex
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+
+  if (awawaIndexes.length > 0) {
+    return awawaIndexes;
+  }
+
   const solcitoIndexes = player.awawas
     .map((alive, slotIndex) =>
       alive && player.protections[slotIndex]?.type === 'solcito'
@@ -169,6 +182,27 @@ function getSolcitoValidSlotIndexes(player: PlayerState) {
       player.awawas[index] && !protection ? index : -1,
     )
     .filter((slotIndex) => slotIndex !== -1);
+}
+
+function getAwawaCaptureTarget(state: GameState) {
+  for (let step = 1; step < state.players.length; step += 1) {
+    const index = (state.currentPlayerIndex + step) % state.players.length;
+    const player = state.players[index];
+
+    if (getAliveAwawaCount(player) === 0) {
+      continue;
+    }
+
+    const slotIndex = player.awawas.findIndex(
+      (alive, protectionIndex) => alive && !player.protections[protectionIndex],
+    );
+
+    if (slotIndex !== -1) {
+      return { playerIndex: index, slotIndex };
+    }
+  }
+
+  return null;
 }
 
 function getLeftPlayerIndexes(players: PlayerState[], currentIndex: number) {
@@ -208,7 +242,7 @@ function isFirstRound(state: GameState) {
 
 function canPlayAguila(state: GameState, player: PlayerState) {
   return (
-    !player.hasPlayedCardThisTurn &&
+    player.playedCardsThisTurn < 2 &&
     !isFirstRound(state) &&
     getAguilaTargetIndex(state) !== null
   );
@@ -216,7 +250,7 @@ function canPlayAguila(state: GameState, player: PlayerState) {
 
 function canPlayBebe(state: GameState, player: PlayerState) {
   return (
-    !player.hasPlayedCardThisTurn &&
+    player.playedCardsThisTurn < 2 &&
     state.colonyCount >= 1 &&
     getAliveAwawaCount(player) < GAME_CONFIG.awawaSlots &&
     getMissingAwawaSlotIndex(player) !== -1
@@ -243,12 +277,12 @@ function getNextSolcitoTarget(state: GameState) {
 }
 
 function canPlaySolcito(state: GameState, player: PlayerState) {
-  return !player.hasPlayedCardThisTurn && !!getNextSolcitoTarget(state);
+  return player.playedCardsThisTurn < 2 && !!getNextSolcitoTarget(state);
 }
 
 function canPlayElefante(state: GameState, player: PlayerState) {
   return (
-    !player.hasPlayedCardThisTurn &&
+    player.playedCardsThisTurn < 2 &&
     player.awawas.some((alive) => alive)
   );
 }
@@ -290,7 +324,7 @@ function getGritarValidSlotIndexes(player: PlayerState) {
 }
 
 function canPlayGritar(state: GameState, player: PlayerState) {
-  return !player.hasPlayedCardThisTurn && !!getGritarTarget(state);
+  return player.playedCardsThisTurn < 2 && !!getGritarTarget(state);
 }
 
 function getReyTargetIndex(state: GameState) {
@@ -320,7 +354,7 @@ function getReyValidSlotIndexes(player: PlayerState) {
 
 function canPlayRey(state: GameState, player: PlayerState) {
   return (
-    !player.hasPlayedCardThisTurn &&
+    player.playedCardsThisTurn < 2 &&
     getAliveAwawaCount(player) < GAME_CONFIG.awawaSlots &&
     getMissingAwawaSlotIndex(player) !== -1 &&
     getReyTargetIndex(state) !== null
@@ -561,11 +595,15 @@ function killAwawaAtSlot(player: PlayerState, targetIndex: number) {
   const awawas = [...player.awawas];
   const protections = [...player.protections];
   const targetType =
-    player.protections[targetIndex]?.type === 'solcito'
+    player.protections[targetIndex]?.type === 'awawa'
+      ? 'awawa'
+      : player.protections[targetIndex]?.type === 'solcito'
       ? 'solcito'
       : 'unprotected';
 
-  awawas[targetIndex] = false;
+  if (targetType !== 'awawa') {
+    awawas[targetIndex] = false;
+  }
   protections[targetIndex] = null;
 
   return {
@@ -668,7 +706,7 @@ function resolveAguilaAction(state: GameState) {
       return {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
-        hasPlayedCardThisTurn: true,
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
       };
     }
 
@@ -692,7 +730,9 @@ function resolveAguilaAction(state: GameState) {
       notices: [
         ...attackedPlayer.notices,
         awawaLost
-          ? `P${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
+          ? targetType === 'unprotected'
+            ? `P${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
+            : `P${actorId}'s \u00C1guila took one Awawa from you.`
           : targetType === 'unprotected'
             ? `P${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`
             : `P${actorId}'s \u00C1guila could not reach one of your unprotected Awawas.`,
@@ -769,11 +809,11 @@ function playBebe(state: GameState, selectedCard: Card): GameState {
     awawas[missingSlotIndex] = true;
 
     return {
-      ...player,
-      hand: player.hand.filter((card) => card.id !== selectedCard.id),
-      awawas,
-      hasPlayedCardThisTurn: true,
-    };
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        awawas,
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
+      };
   });
 
   const colonyCount = state.colonyCount - 1;
@@ -835,7 +875,7 @@ function confirmSolcitoAction(state: GameState) {
       return {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
-        hasPlayedCardThisTurn: true,
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
       };
     }
 
@@ -901,10 +941,10 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
     );
 
     return {
-      ...player,
-      hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
       protections,
-      hasPlayedCardThisTurn: true,
+      playedCardsThisTurn: player.playedCardsThisTurn + 1,
     };
   });
 
@@ -965,7 +1005,7 @@ function confirmGritarAction(state: GameState) {
       return {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
-        hasPlayedCardThisTurn: true,
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
         notices: [...player.notices, `Your Gritar removed one protection from P${state.players[target.targetPlayerIndex].id}.`],
       };
     }
@@ -1052,7 +1092,7 @@ function confirmReyAction(state: GameState) {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
         awawas,
-        hasPlayedCardThisTurn: true,
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
         notices: [...player.notices, `Your Rey stole one Awawa from P${state.players[targetIndex].id}.`],
       };
     }
@@ -1174,28 +1214,58 @@ export function placeCardInProtection(
     slotIndex >= currentPlayer.protections.length ||
     !currentPlayer.awawas[slotIndex] ||
     currentPlayer.protections[slotIndex] ||
+    (card.type === 'awawa' && !getAwawaCaptureTarget(state)) ||
     (card.type === 'toilet' &&
       hasToiletOwnedByOtherPlayer(state.players, state.currentPlayerIndex))
   ) {
     return state;
   }
 
+  const awawaCaptureTarget =
+    card.type === 'awawa' ? getAwawaCaptureTarget(state) : null;
+
   const players = state.players.map((player, index) => {
-    if (index !== state.currentPlayerIndex) {
-      return player;
+    if (index === state.currentPlayerIndex) {
+      const protections = [...player.protections];
+      protections[slotIndex] =
+        card.type === 'awawa' && awawaCaptureTarget
+          ? {
+              id: `${card.id}-captured-p${state.players[awawaCaptureTarget.playerIndex].id}`,
+              type: 'awawa',
+              sourcePlayerId: state.players[awawaCaptureTarget.playerIndex].id,
+            }
+          : isTemporaryProtection(card)
+            ? withTemporaryDuration(card)
+            : card;
+
+      return {
+        ...player,
+        hand: player.hand.filter((handCard) => handCard.id !== cardId),
+        protections,
+      };
     }
 
-    const protections = [...player.protections];
-    protections[slotIndex] = isTemporaryProtection(card)
-      ? withTemporaryDuration(card)
-      : card;
+    if (
+      card.type === 'awawa' &&
+      awawaCaptureTarget &&
+      index === awawaCaptureTarget.playerIndex
+    ) {
+      const awawas = [...player.awawas];
+      const protections = [...player.protections];
+      awawas[awawaCaptureTarget.slotIndex] = false;
+      protections[awawaCaptureTarget.slotIndex] = null;
 
-    return {
-      ...player,
-      hand: player.hand.filter((handCard) => handCard.id !== cardId),
-      protections,
-    };
+      return {
+        ...player,
+        awawas,
+        protections,
+      };
+    }
+
+    return player;
   });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
 
   return {
     ...state,
@@ -1204,6 +1274,8 @@ export function placeCardInProtection(
       state.selectedCardId === cardId ? null : state.selectedCardId,
     pendingTargetAction: null,
     lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
   };
 }
 
@@ -1225,7 +1297,7 @@ export function finishTurn(state: GameState): GameState {
         ...nextPlayer,
         notices: index === state.currentPlayerIndex ? [] : nextPlayer.notices,
         hasDrawnThisTurn: false,
-        hasPlayedCardThisTurn: false,
+        playedCardsThisTurn: 0,
         hasThrownCardThisTurn: false,
       };
     }

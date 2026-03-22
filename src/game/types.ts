@@ -10,6 +10,7 @@ export type CardTypeId =
   | 'solcito'
   | 'elefante'
   | 'correr'
+  | 'awawa'
   | 'toilet'
   | 'gritar'
   | 'rey';
@@ -33,7 +34,7 @@ export type PlayerState = {
   awawas: boolean[];
   notices: string[];
   hasDrawnThisTurn: boolean;
-  hasPlayedCardThisTurn: boolean;
+  playedCardsThisTurn: number;
   hasThrownCardThisTurn: boolean;
 };
 

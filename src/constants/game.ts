@@ -5,11 +5,12 @@ export const PLAYER_COUNT = {
 } as const;
 
 export const GAME_CONFIG = {
-  initialDeckSize: 60,
+  initialDeckSize: 75,
   initialColonySize: 10,
   awawaSlots: 5,
   initialHandSize: 3,
   maxHandSize: 3,
   copiesPerCardType: 5,
+  extraAguilaCopies: 10,
   temporaryProtectionTurnStarts: 2,
 } as const;
