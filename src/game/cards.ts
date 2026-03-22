@@ -13,6 +13,7 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'correr', names: { es: 'Correr' } },
   { id: 'awawa', names: { es: 'Awawa' } },
   { id: 'toilet', names: { es: 'Toilet' } },
+  { id: 'oloroso', names: { es: 'Oloroso' } },
   { id: 'gritar', names: { es: 'Gritar' } },
   { id: 'rey', names: { es: 'Rey' } },
 ];
@@ -29,6 +30,7 @@ export const CARD_COPY_COUNTS: Record<CardTypeId, number> = {
   correr: GAME_CONFIG.copiesPerCardType,
   awawa: GAME_CONFIG.copiesPerCardType,
   toilet: GAME_CONFIG.copiesPerCardType,
+  oloroso: GAME_CONFIG.copiesPerCardType,
   gritar: GAME_CONFIG.copiesPerCardType,
   rey: GAME_CONFIG.copiesPerCardType,
 };
@@ -80,6 +82,7 @@ export function canCardProtect(card: Card) {
     card.type !== 'bebe' &&
     card.type !== 'solcito' &&
     card.type !== 'elefante' &&
+    card.type !== 'oloroso' &&
     card.type !== 'gritar' &&
     card.type !== 'rey'
   );
@@ -91,6 +94,7 @@ export function canCardBePlayed(card: Card) {
     card.type === 'bebe' ||
     card.type === 'solcito' ||
     card.type === 'elefante' ||
+    card.type === 'oloroso' ||
     card.type === 'gritar' ||
     card.type === 'rey'
   );

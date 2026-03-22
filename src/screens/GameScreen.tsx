@@ -24,7 +24,7 @@ type GameScreenProps = {
   currentHand: Card[];
   selectedCardId: string | null;
   pendingTarget: {
-    type: 'aguila' | 'solcito' | 'gritar' | 'rey';
+    type: 'aguila' | 'solcito' | 'oloroso' | 'gritar' | 'rey';
     playerId: number;
     protections: Array<Card | null>;
     awawas: boolean[];
@@ -103,6 +103,8 @@ export function GameScreen({
       ? 'Eat'
       : pendingTarget?.type === 'solcito'
         ? 'Send to Rest'
+        : pendingTarget?.type === 'oloroso'
+          ? 'Spread Smell'
         : pendingTarget?.type === 'gritar'
           ? 'Scare'
           : pendingTarget?.type === 'rey'
@@ -113,6 +115,8 @@ export function GameScreen({
       ? `Choose an Awawa from P${pendingTarget.playerId}`
       : pendingTarget?.type === 'solcito'
         ? `Choose where to send Solcito on P${pendingTarget.playerId}`
+        : pendingTarget?.type === 'oloroso'
+          ? `Choose where to send Oloroso on P${pendingTarget.playerId}`
         : pendingTarget?.type === 'gritar'
           ? `Choose an Awawa to scare on P${pendingTarget.playerId}`
           : pendingTarget?.type === 'rey'

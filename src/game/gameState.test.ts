@@ -24,7 +24,7 @@ import {
 } from './gameState';
 
 describe('gameState', () => {
-  it('builds a deck with 15 aguila cards and 5 copies of every other card type', () => {
+  it('builds a deck with 10 aguila cards and 4 copies of every other card type, including oloroso', () => {
     const deck = buildConfiguredDeck();
     const counts = deck.reduce<Record<string, number>>((result, card) => {
       result[card.type] = (result[card.type] ?? 0) + 1;
@@ -43,6 +43,7 @@ describe('gameState', () => {
     expect(counts.correr).toBe(GAME_CONFIG.copiesPerCardType);
     expect(counts.awawa).toBe(GAME_CONFIG.copiesPerCardType);
     expect(counts.toilet).toBe(GAME_CONFIG.copiesPerCardType);
+    expect(counts.oloroso).toBe(GAME_CONFIG.copiesPerCardType);
     expect(counts.gritar).toBe(GAME_CONFIG.copiesPerCardType);
     expect(counts.rey).toBe(GAME_CONFIG.copiesPerCardType);
   });
@@ -216,6 +217,9 @@ describe('gameState', () => {
     const elefanteState = createGameState(1);
     elefanteState.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
 
+    const olorosoState = createGameState(1);
+    olorosoState.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+
     const gritarState = createGameState(1);
     gritarState.players[0].hand = [{ id: 'gritar-x', type: 'gritar' }];
 
@@ -226,6 +230,7 @@ describe('gameState', () => {
     expect(placeCardInProtection(bebeState, 'bebe-x', 0)).toBe(bebeState);
     expect(placeCardInProtection(solcitoState, 'solcito-x', 0)).toBe(solcitoState);
     expect(placeCardInProtection(elefanteState, 'elefante-x', 0)).toBe(elefanteState);
+    expect(placeCardInProtection(olorosoState, 'oloroso-x', 0)).toBe(olorosoState);
     expect(placeCardInProtection(gritarState, 'gritar-x', 0)).toBe(gritarState);
     expect(placeCardInProtection(reyState, 'rey-x', 0)).toBe(reyState);
   });
@@ -368,6 +373,76 @@ describe('gameState', () => {
     expect(afterPlay.players[1].protections[0]?.type).toBe('solcito');
     expect(playerTwoFirstTurn.players[1].protections[0]?.type).toBe('solcito');
     expect(playerTwoSecondTurn.players[1].protections[0]).toBeNull();
+  });
+
+  it('oloroso can be played only if a later player has an available empty protection slot', () => {
+    const enabledState = createGameState(3);
+    enabledState.turnsCompleted = 2;
+    enabledState.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+
+    const disabledState = createGameState(3);
+    disabledState.turnsCompleted = 2;
+    disabledState.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+    disabledState.players[1].protections = disabledState.players[1].protections.map(() => ({
+      id: 'fill-p2',
+      type: 'roca',
+    }));
+    disabledState.players[2].protections = disabledState.players[2].protections.map(() => ({
+      id: 'fill-p3',
+      type: 'cueva',
+    }));
+
+    expect(canPlaySelectedCard(selectCard(enabledState, 'oloroso-x'))).toBe(true);
+    expect(canPlaySelectedCard(selectCard(disabledState, 'oloroso-x'))).toBe(false);
+  });
+
+  it('oloroso targets the next eligible player, removes adjacent protections, and blocks adjacent slots for two turns', () => {
+    const state = createGameState(3);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+    state.players[1].protections = state.players[1].protections.map(() => ({
+      id: 'fill-p2',
+      type: 'roca',
+    }));
+    state.players[2].protections[1] = { id: 'roca-p3-left', type: 'roca' };
+    state.players[2].protections[3] = { id: 'planta-p3-right', type: 'planta' };
+
+    const pendingState = playSelectedCard(selectCard(state, 'oloroso-x'));
+    const pendingTarget = getPendingTarget(pendingState);
+    const afterPlay = confirmTargetAction(selectTargetSlot(pendingState, 2));
+    const playerOneAfterTurn = finishTurn(afterPlay);
+    const playerThreeTurn = finishTurn(playerOneAfterTurn);
+
+    playerThreeTurn.players[2].hand = [{ id: 'roca-p3', type: 'roca' }];
+    const blockedPlacement = placeCardInProtection(playerThreeTurn, 'roca-p3', 1);
+
+    expect(pendingTarget?.type).toBe('oloroso');
+    expect(pendingTarget?.playerId).toBe(3);
+    expect(pendingTarget?.validSlotIndexes).toEqual([0, 2, 4]);
+    expect(afterPlay.players[2].protections[2]?.type).toBe('oloroso');
+    expect(afterPlay.players[2].protections[1]).toBeNull();
+    expect(afterPlay.players[2].protections[3]).toBeNull();
+    expect(blockedPlacement.players[2].protections[1]).toBeNull();
+  });
+
+  it('oloroso disappears after two starts of the target player turn and then adjacent slots can receive protections again', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(playSelectedCard(selectCard(state, 'oloroso-x')), 2),
+    );
+    const playerTwoFirstTurn = finishTurn(afterPlay);
+    const playerOneTurnAgain = finishTurn(playerTwoFirstTurn);
+    const playerTwoSecondTurn = finishTurn(playerOneTurnAgain);
+
+    playerTwoSecondTurn.players[1].hand = [{ id: 'roca-p2', type: 'roca' }];
+    const afterPlacement = placeCardInProtection(playerTwoSecondTurn, 'roca-p2', 1);
+
+    expect(playerTwoFirstTurn.players[1].protections[2]?.type).toBe('oloroso');
+    expect(playerTwoSecondTurn.players[1].protections[2]).toBeNull();
+    expect(afterPlacement.players[1].protections[1]?.type).toBe('roca');
   });
 
   it('elefante replaces every alive protection slot and removes existing protections and solcitos', () => {

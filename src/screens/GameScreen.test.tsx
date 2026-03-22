@@ -302,6 +302,24 @@ describe('GameScreen', () => {
         <GameScreen
           {...baseProps}
           pendingTarget={{
+            type: 'oloroso',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [1],
+            selectedSlotIndex: 1,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Spread Smell' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
             type: 'gritar',
             playerId: 2,
             protections: baseProps.playerBoards[1].protections,

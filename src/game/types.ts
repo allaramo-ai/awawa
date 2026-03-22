@@ -12,6 +12,7 @@ export type CardTypeId =
   | 'correr'
   | 'awawa'
   | 'toilet'
+  | 'oloroso'
   | 'gritar'
   | 'rey';
 
@@ -40,7 +41,12 @@ export type PlayerState = {
 
 export type GameStatus = 'playing' | 'game_over';
 
-export type PendingTargetActionType = 'aguila' | 'solcito' | 'gritar' | 'rey';
+export type PendingTargetActionType =
+  | 'aguila'
+  | 'solcito'
+  | 'oloroso'
+  | 'gritar'
+  | 'rey';
 
 export type PendingTargetAction = {
   type: PendingTargetActionType;

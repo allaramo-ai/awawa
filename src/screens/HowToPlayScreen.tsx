@@ -16,6 +16,7 @@ const rules = [
   'Aguila attacks to the right. It prefers an Awawa marked by Awawa, then one marked by Solcito, and then an unprotected Awawa. It can skip fully protected players until it finds a valid target. After choosing Aguila, you must pick a valid Awawa on that player board and confirm with Eat or cancel the action.',
   'Bebe restores one missing Awawa if you have space and Colonia still has stock.',
   'Solcito uses a two-step action. Choose an empty protection slot on the next eligible player, then confirm with Send to Rest or cancel. It marks that Awawa as a priority target and lasts until that player has started 2 turns.',
+  'Oloroso uses a two-step action. Choose an Awawa with an empty protection slot on the next eligible player to your right, then confirm. That Awawa is protected for 2 turns, any protections immediately to its left or right are removed, and those left or right slots cannot receive protections while Oloroso remains.',
   'Awawa is dragged onto your own protection row, but it captures the next player to the right who has an unprotected Awawa. That player loses one unprotected Awawa, and your chosen slot becomes Awawa P#.',
   'Correr is a temporary protection card. It blocks Aguila for 2 turns of the protected player and then disappears.',
   'Elefante covers all of your alive protection slots, replaces any card already there, and blocks Aguila for 2 turns of that player.',

@@ -25,7 +25,10 @@ function getMissingAwawaSlotIndex(player: PlayerState) {
 
 function getEmptyProtectionSlotIndex(player: PlayerState) {
   return player.protections.findIndex(
-    (protection, index) => player.awawas[index] && !protection,
+    (protection, index) =>
+      player.awawas[index] &&
+      !protection &&
+      !isProtectionPlacementBlocked(player, index),
   );
 }
 
@@ -34,7 +37,8 @@ function isTemporaryProtection(card: Card | null) {
     card?.type === 'solcito' ||
     card?.type === 'correr' ||
     card?.type === 'elefante' ||
-    card?.type === 'toilet'
+    card?.type === 'toilet' ||
+    card?.type === 'oloroso'
   );
 }
 
@@ -43,6 +47,14 @@ function withTemporaryDuration(card: Card) {
     ...card,
     remainingTurnStarts: GAME_CONFIG.temporaryProtectionTurnStarts,
   };
+}
+
+function isProtectionPlacementBlocked(player: PlayerState, slotIndex: number) {
+  return (
+    (slotIndex > 0 && player.protections[slotIndex - 1]?.type === 'oloroso') ||
+    (slotIndex < player.protections.length - 1 &&
+      player.protections[slotIndex + 1]?.type === 'oloroso')
+  );
 }
 
 function getActivePlayerIndexes(players: PlayerState[]) {
@@ -179,7 +191,47 @@ function getAguilaValidSlotIndexes(player: PlayerState) {
 function getSolcitoValidSlotIndexes(player: PlayerState) {
   return player.protections
     .map((protection, index) =>
-      player.awawas[index] && !protection ? index : -1,
+      player.awawas[index] &&
+      !protection &&
+      !isProtectionPlacementBlocked(player, index)
+        ? index
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
+function getOlorosoTarget(state: GameState) {
+  for (let step = 1; step < state.players.length; step += 1) {
+    const index = (state.currentPlayerIndex + step) % state.players.length;
+    const player = state.players[index];
+
+    if (getAliveAwawaCount(player) === 0) {
+      continue;
+    }
+
+    const slotIndex = player.protections.findIndex(
+      (protection, protectionIndex) =>
+        player.awawas[protectionIndex] &&
+        !protection &&
+        !isProtectionPlacementBlocked(player, protectionIndex),
+    );
+
+    if (slotIndex !== -1) {
+      return { playerIndex: index, slotIndex };
+    }
+  }
+
+  return null;
+}
+
+function getOlorosoValidSlotIndexes(player: PlayerState) {
+  return player.protections
+    .map((protection, index) =>
+      player.awawas[index] &&
+      !protection &&
+      !isProtectionPlacementBlocked(player, index)
+        ? index
+        : -1,
     )
     .filter((slotIndex) => slotIndex !== -1);
 }
@@ -285,6 +337,10 @@ function canPlayElefante(state: GameState, player: PlayerState) {
     player.playedCardsThisTurn < 2 &&
     player.awawas.some((alive) => alive)
   );
+}
+
+function canPlayOloroso(state: GameState, player: PlayerState) {
+  return player.playedCardsThisTurn < 2 && !!getOlorosoTarget(state);
 }
 
 function getGritarTarget(state: GameState) {
@@ -472,6 +528,8 @@ export function getPendingTarget(state: GameState) {
         ? getAguilaValidSlotIndexes(targetPlayer)
         : state.pendingTargetAction.type === 'solcito'
           ? getSolcitoValidSlotIndexes(targetPlayer)
+          : state.pendingTargetAction.type === 'oloroso'
+            ? getOlorosoValidSlotIndexes(targetPlayer)
           : state.pendingTargetAction.type === 'gritar'
             ? getGritarValidSlotIndexes(targetPlayer)
             : getReyValidSlotIndexes(targetPlayer),
@@ -580,6 +638,10 @@ export function canPlaySelectedCard(state: GameState) {
     return canPlayElefante(state, currentPlayer);
   }
 
+  if (selectedCard.type === 'oloroso') {
+    return canPlayOloroso(state, currentPlayer);
+  }
+
   if (selectedCard.type === 'gritar') {
     return canPlayGritar(state, currentPlayer);
   }
@@ -649,6 +711,8 @@ export function selectTargetSlot(
       ? getAguilaValidSlotIndexes(targetPlayer)
       : pendingAction.type === 'solcito'
         ? getSolcitoValidSlotIndexes(targetPlayer)
+        : pendingAction.type === 'oloroso'
+          ? getOlorosoValidSlotIndexes(targetPlayer)
         : pendingAction.type === 'gritar'
           ? getGritarValidSlotIndexes(targetPlayer)
           : getReyValidSlotIndexes(targetPlayer);
@@ -925,6 +989,104 @@ function confirmSolcitoAction(state: GameState) {
   };
 }
 
+function beginOlorosoAction(state: GameState): GameState {
+  const target = getOlorosoTarget(state);
+
+  if (!target) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'oloroso',
+      targetPlayerIndex: target.playerIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
+
+function confirmOlorosoAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'oloroso' ||
+    pendingAction.type !== 'oloroso' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const target = pendingAction;
+  const selectedSlotIndex = target.selectedSlotIndex;
+
+  if (selectedSlotIndex === null) {
+    return state;
+  }
+
+  if (!getOlorosoValidSlotIndexes(state.players[target.targetPlayerIndex]).includes(selectedSlotIndex)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
+        notices: [
+          ...player.notices,
+          `Your Oloroso covered one Awawa on P${state.players[target.targetPlayerIndex].id}.`,
+        ],
+      };
+    }
+
+    if (index !== target.targetPlayerIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[selectedSlotIndex] = withTemporaryDuration({
+      id: `${selectedCard.id}-target-${player.id}`,
+      type: 'oloroso',
+      sourcePlayerId: actorId,
+    });
+
+    if (selectedSlotIndex > 0) {
+      protections[selectedSlotIndex - 1] = null;
+    }
+
+    if (selectedSlotIndex < protections.length - 1) {
+      protections[selectedSlotIndex + 1] = null;
+    }
+
+    return {
+      ...player,
+      protections,
+      notices: [
+        ...player.notices,
+        `P${actorId}'s Oloroso covered one of your Awawas for 2 turns.`,
+      ],
+    };
+  });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    pendingTargetAction: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
 function playElefante(state: GameState, selectedCard: Card): GameState {
   const players = state.players.map((player, index) => {
     if (index !== state.currentPlayerIndex) {
@@ -933,6 +1095,7 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
 
     const protections = player.protections.map((protection, slotIndex) =>
       player.awawas[slotIndex]
+      && !isProtectionPlacementBlocked(player, slotIndex)
         ? withTemporaryDuration({
             id: `${selectedCard.id}-slot-${slotIndex + 1}`,
             type: 'elefante' as const,
@@ -1154,6 +1317,10 @@ export function playSelectedCard(state: GameState): GameState {
     return playElefante(state, selectedCard);
   }
 
+  if (selectedCard.type === 'oloroso') {
+    return beginOlorosoAction(state);
+  }
+
   if (selectedCard.type === 'gritar') {
     return beginGritarAction(state);
   }
@@ -1178,6 +1345,10 @@ export function confirmTargetAction(state: GameState): GameState {
 
   if (pendingAction.type === 'solcito') {
     return confirmSolcitoAction(state);
+  }
+
+  if (pendingAction.type === 'oloroso') {
+    return confirmOlorosoAction(state);
   }
 
   if (pendingAction.type === 'gritar') {
@@ -1213,6 +1384,7 @@ export function placeCardInProtection(
     slotIndex < 0 ||
     slotIndex >= currentPlayer.protections.length ||
     !currentPlayer.awawas[slotIndex] ||
+    isProtectionPlacementBlocked(currentPlayer, slotIndex) ||
     currentPlayer.protections[slotIndex] ||
     (card.type === 'awawa' && !getAwawaCaptureTarget(state)) ||
     (card.type === 'toilet' &&
