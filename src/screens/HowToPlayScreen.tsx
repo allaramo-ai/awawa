@@ -13,13 +13,13 @@ const rules = [
   'Each player begins with 5 Awawa slots, 3 cards in hand, and shared access to the deck and Colonia.',
   'On your turn you can draw once if your hand has fewer than 3 cards, throw one selected card, play one playable card, place one protection card, and then finish your turn.',
   'Protection cards can be dragged onto your protection row above each Awawa slot.',
-  'Aguila attacks to the right. It prefers an Awawa marked by Solcito, otherwise an unprotected Awawa, and it can skip fully protected players until it finds a valid target.',
+  'Aguila attacks to the right. It prefers an Awawa marked by Solcito, otherwise an unprotected Awawa, and it can skip fully protected players until it finds a valid target. After choosing Aguila, you must pick a valid Awawa on that player board and confirm with Eat or cancel the action.',
   'Bebe restores one missing Awawa if you have space and Colonia still has stock.',
-  'Solcito lands on the next player board with an empty protection slot, marks that Awawa as a priority target, and disappears when that player next turn starts.',
+  'Solcito uses a two-step action. Choose an empty protection slot on the next eligible player, then confirm with Send to Rest or cancel. It marks that Awawa as a priority target and disappears when that player next turn starts.',
   'Correr is a temporary protection card. It blocks Aguila for one round and disappears when your next turn starts.',
   'Elefante covers all of your alive protection slots, replaces any card already there, and blocks Aguila until your next turn starts.',
-  'Gritar removes one removable protection from the closest player to your left who has one. It cannot remove Elefante or Solcito.',
-  'Rey can be played only if you have fewer than 5 Awawas. It steals one Awawa from the player with the most Awawas, breaking ties by choosing the closest player to your right.',
+  'Gritar uses a two-step action. Choose a removable protection from the closest eligible player to your left, then confirm with Scare or cancel. It cannot remove Elefante or Solcito.',
+  'Rey can be played only if you have fewer than 5 Awawas. It uses a two-step action: choose one Awawa from the player with the most Awawas, breaking ties by the closest player to your right, then confirm with Stole or cancel.',
   'A player with no Awawas left is out. The game ends when one player remains or the deck is exhausted.',
 ];
 

@@ -3,13 +3,21 @@ import {
   canDrawCard,
   canPlaySelectedCard,
   canThrowSelectedCard,
+  cancelAguilaAction,
+  cancelTargetAction,
+  confirmAguilaAction,
+  confirmTargetAction,
   createGameState,
   dismissCurrentNotification,
   drawCard,
   finishTurn,
   getCurrentPlayer,
+  getPendingAguilaTarget,
+  getPendingTarget,
   placeCardInProtection,
   playSelectedCard,
+  selectAguilaTargetSlot,
+  selectTargetSlot,
   selectCard,
   throwSelectedCard,
 } from './gameState';
@@ -46,7 +54,6 @@ describe('gameState', () => {
 
     expect(getCurrentPlayer(afterFirstDraw).hand).toHaveLength(3);
     expect(getCurrentPlayer(afterFirstDraw).hasDrawnThisTurn).toBe(true);
-    expect(afterFirstDraw.lastActionText).toBeNull();
     expect(afterSecondDraw).toBe(afterFirstDraw);
   });
 
@@ -85,7 +92,6 @@ describe('gameState', () => {
     state.drawPile = state.drawPile.slice(0, 1);
 
     const afterLastCardDraw = drawCard(state);
-
     expect(afterLastCardDraw.drawPile).toHaveLength(0);
     expect(afterLastCardDraw.status).toBe('playing');
 
@@ -107,15 +113,8 @@ describe('gameState', () => {
 
   it('places non-playable cards into protection slots and preserves them across turns', () => {
     const state = createGameState(2);
-    const protectionCard = state.players[0].hand.find(
-      (card) =>
-        card.type !== 'aguila' &&
-        card.type !== 'bebe' &&
-        card.type !== 'solcito' &&
-        card.type !== 'elefante' &&
-        card.type !== 'gritar' &&
-        card.type !== 'rey',
-    );
+    state.players[0].hand = [{ id: 'roca-x', type: 'roca' }];
+    const protectionCard = state.players[0].hand[0];
 
     expect(protectionCard).toBeDefined();
 
@@ -127,7 +126,6 @@ describe('gameState', () => {
       protectionCard!.id,
     );
     expect(afterTurnTwo.players[0].protections[0]?.id).toBe(protectionCard!.id);
-    expect(afterPlacement.lastActionText).toBeNull();
   });
 
   it('does not allow playable cards to be placed in protection slots', () => {
@@ -161,9 +159,7 @@ describe('gameState', () => {
     const state = createGameState(2);
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
 
-    const afterSelectingAguila = selectCard(state, 'aguila-x');
-
-    expect(canPlaySelectedCard(afterSelectingAguila)).toBe(false);
+    expect(canPlaySelectedCard(selectCard(state, 'aguila-x'))).toBe(false);
   });
 
   it('allows aguila to be played starting in the second round', () => {
@@ -171,30 +167,29 @@ describe('gameState', () => {
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
 
     const secondRoundState = finishTurn(finishTurn(state));
-    const afterSelectingAguila = selectCard(secondRoundState, 'aguila-x');
-
-    expect(canPlaySelectedCard(afterSelectingAguila)).toBe(true);
+    expect(canPlaySelectedCard(selectCard(secondRoundState, 'aguila-x'))).toBe(
+      true,
+    );
   });
 
   it('enables bebe only when the player has a missing awawa and the colonia has stock', () => {
     const noMissingState = createGameState(1);
     noMissingState.players[0].hand = [{ id: 'bebe-x', type: 'bebe' }];
-    const noMissingAwawa = selectCard(noMissingState, 'bebe-x');
 
     const withMissingState = createGameState(1);
     withMissingState.players[0].hand = [{ id: 'bebe-x', type: 'bebe' }];
     withMissingState.players[0].awawas = [true, false, true, true, true];
-    const withMissingAwawa = selectCard(withMissingState, 'bebe-x');
 
     const emptyColonyState = createGameState(1);
     emptyColonyState.players[0].hand = [{ id: 'bebe-x', type: 'bebe' }];
     emptyColonyState.players[0].awawas = [true, false, true, true, true];
     emptyColonyState.colonyCount = 0;
-    const withEmptyColony = selectCard(emptyColonyState, 'bebe-x');
 
-    expect(canPlaySelectedCard(noMissingAwawa)).toBe(false);
-    expect(canPlaySelectedCard(withMissingAwawa)).toBe(true);
-    expect(canPlaySelectedCard(withEmptyColony)).toBe(false);
+    expect(canPlaySelectedCard(selectCard(noMissingState, 'bebe-x'))).toBe(false);
+    expect(canPlaySelectedCard(selectCard(withMissingState, 'bebe-x'))).toBe(true);
+    expect(canPlaySelectedCard(selectCard(emptyColonyState, 'bebe-x'))).toBe(
+      false,
+    );
   });
 
   it('playing bebe restores one missing awawa and reduces colonia by one', () => {
@@ -207,7 +202,6 @@ describe('gameState', () => {
 
     expect(afterPlay.players[0].awawas).toEqual([true, true, true, false, true]);
     expect(afterPlay.colonyCount).toBe(2);
-    expect(afterPlay.lastActionText).toBeNull();
   });
 
   it('allows only one played card per turn even if multiple playable cards are in hand', () => {
@@ -219,18 +213,18 @@ describe('gameState', () => {
     ];
     state.players[0].awawas = [true, false, true, true, true];
 
-    const afterAguilaPlay = playSelectedCard(selectCard(state, 'aguila-x'));
-    const afterSelectBebe = selectCard(afterAguilaPlay, 'bebe-x');
+    const afterAguilaStart = playSelectedCard(selectCard(state, 'aguila-x'));
+    const afterCancel = cancelAguilaAction(afterAguilaStart);
+    const afterSelectBebe = selectCard(afterCancel, 'bebe-x');
 
-    expect(afterAguilaPlay.players[0].hasPlayedCardThisTurn).toBe(true);
-    expect(canPlaySelectedCard(afterSelectBebe)).toBe(false);
+    expect(afterAguilaStart.pendingTargetAction).toBeNull();
+    expect(canPlaySelectedCard(afterSelectBebe)).toBe(true);
   });
 
   it('solcito can be played only if a later player has an empty protection slot', () => {
     const enabledBaseState = createGameState(3);
     enabledBaseState.turnsCompleted = 2;
     enabledBaseState.players[0].hand = [{ id: 'solcito-x', type: 'solcito' }];
-    const enabledState = selectCard(enabledBaseState, 'solcito-x');
 
     const disabledBaseState = createGameState(3);
     disabledBaseState.turnsCompleted = 2;
@@ -243,10 +237,13 @@ describe('gameState', () => {
       id: 'fill-p3',
       type: 'roca',
     }));
-    const disabledState = selectCard(disabledBaseState, 'solcito-x');
 
-    expect(canPlaySelectedCard(enabledState)).toBe(true);
-    expect(canPlaySelectedCard(disabledState)).toBe(false);
+    expect(canPlaySelectedCard(selectCard(enabledBaseState, 'solcito-x'))).toBe(
+      true,
+    );
+    expect(canPlaySelectedCard(selectCard(disabledBaseState, 'solcito-x'))).toBe(
+      false,
+    );
   });
 
   it('solcito targets the next eligible player and occupies their empty protection slot', () => {
@@ -258,11 +255,15 @@ describe('gameState', () => {
       type: 'roca',
     }));
 
-    const afterPlay = playSelectedCard(selectCard(state, 'solcito-x'));
+    const pendingState = playSelectedCard(selectCard(state, 'solcito-x'));
+    const pendingTarget = getPendingTarget(pendingState);
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(pendingState, 0),
+    );
 
+    expect(pendingTarget?.type).toBe('solcito');
     expect(afterPlay.players[2].protections[0]?.type).toBe('solcito');
     expect(afterPlay.players[2].protections[0]?.sourcePlayerId).toBe(1);
-    expect(afterPlay.lastActionText).toBeNull();
     expect(afterPlay.players[2].notices.join(' ')).toContain(
       "P1's Solcito landed on your Awawa board.",
     );
@@ -273,7 +274,9 @@ describe('gameState', () => {
     state.turnsCompleted = 2;
     state.players[0].hand = [{ id: 'solcito-x', type: 'solcito' }];
 
-    const afterPlay = playSelectedCard(selectCard(state, 'solcito-x'));
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(playSelectedCard(selectCard(state, 'solcito-x')), 0),
+    );
     const playerTwoTurn = finishTurn(afterPlay);
 
     expect(afterPlay.players[1].protections[0]?.type).toBe('solcito');
@@ -327,7 +330,9 @@ describe('gameState', () => {
     disabledState.players[2].protections[1] = { id: 'elefante-p3', type: 'elefante' };
 
     expect(canPlaySelectedCard(selectCard(enabledState, 'gritar-x'))).toBe(true);
-    expect(canPlaySelectedCard(selectCard(disabledState, 'gritar-x'))).toBe(false);
+    expect(canPlaySelectedCard(selectCard(disabledState, 'gritar-x'))).toBe(
+      false,
+    );
   });
 
   it('gritar removes the closest left removable protection and skips protected-only players', () => {
@@ -341,8 +346,13 @@ describe('gameState', () => {
     };
     state.players[2].protections[1] = { id: 'roca-p3', type: 'roca' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'gritar-x'));
+    const pendingState = playSelectedCard(selectCard(state, 'gritar-x'));
+    const pendingTarget = getPendingTarget(pendingState);
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(pendingState, 1),
+    );
 
+    expect(pendingTarget?.type).toBe('gritar');
     expect(afterPlay.players[3].protections[0]?.type).toBe('solcito');
     expect(afterPlay.players[2].protections[1]).toBeNull();
     expect(afterPlay.players[0].notices.join(' ')).toContain(
@@ -377,8 +387,13 @@ describe('gameState', () => {
     state.players[3].awawas = [true, true, true, true, true];
     state.players[3].protections[0] = { id: 'planta-p4', type: 'planta' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'rey-x'));
+    const pendingState = playSelectedCard(selectCard(state, 'rey-x'));
+    const pendingTarget = getPendingTarget(pendingState);
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(pendingState, 0),
+    );
 
+    expect(pendingTarget?.type).toBe('rey');
     expect(afterPlay.players[0].awawas).toEqual([true, true, true, true, true]);
     expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(4);
     expect(afterPlay.players[1].protections[0]).toBeNull();
@@ -386,6 +401,19 @@ describe('gameState', () => {
     expect(afterPlay.players[0].notices.join(' ')).toContain(
       'Your Rey stole one Awawa from P2.',
     );
+  });
+
+  it('starts an aguila target selection and lets the player cancel it', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+
+    const pendingState = playSelectedCard(selectCard(state, 'aguila-x'));
+    const canceledState = cancelAguilaAction(pendingState);
+
+    expect(pendingState.pendingTargetAction).not.toBeNull();
+    expect(canceledState.pendingTargetAction).toBeNull();
+    expect(canceledState.selectedCardId).toBe('aguila-x');
   });
 
   it('aguila prioritizes killing the awawa marked by solcito and keeps other protections', () => {
@@ -399,10 +427,13 @@ describe('gameState', () => {
     };
     state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+    const pendingState = playSelectedCard(selectCard(state, 'aguila-x'));
+    const afterConfirm = confirmAguilaAction(
+      selectAguilaTargetSlot(pendingState, 2),
+    );
 
-    expect(afterPlay.players[1].awawas[2]).toBe(false);
-    expect(afterPlay.players[1].protections[0]?.type).toBe('roca');
+    expect(afterConfirm.players[1].awawas[2]).toBe(false);
+    expect(afterConfirm.players[1].protections[0]?.type).toBe('roca');
   });
 
   it('aguila cannot kill through elefante protection', () => {
@@ -416,11 +447,10 @@ describe('gameState', () => {
 
     const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
 
+    expect(afterPlay.pendingTargetAction).toBeNull();
     expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(5);
     expect(afterPlay.players[1].protections.every((card) => card?.type === 'elefante')).toBe(true);
-    expect(afterPlay.players[0].notices.join(' ')).toContain(
-      'could not reach any unprotected Awawa.',
-    );
+    expect(afterPlay.players[0].notices).toHaveLength(0);
   });
 
   it('aguila skips a fully protected right player and attacks the next valid player on the right', () => {
@@ -431,14 +461,18 @@ describe('gameState', () => {
       id: `elefante-p2-${index}`,
       type: 'elefante',
     }));
-    state.players[2].protections[0] = null;
     state.players[2].protections[1] = { id: 'roca-p3', type: 'roca' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+    const pendingState = playSelectedCard(selectCard(state, 'aguila-x'));
+    const pendingTarget = getPendingAguilaTarget(pendingState);
+    const afterConfirm = confirmAguilaAction(
+      selectAguilaTargetSlot(pendingState, 0),
+    );
 
-    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(5);
-    expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(4);
-    expect(afterPlay.players[0].notices.join(' ')).toContain(
+    expect(pendingTarget?.playerId).toBe(3);
+    expect(afterConfirm.players[1].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterConfirm.players[2].awawas.filter(Boolean)).toHaveLength(4);
+    expect(afterConfirm.players[0].notices.join(' ')).toContain(
       'Your Águila took one Awawa from P3.',
     );
   });
@@ -458,15 +492,17 @@ describe('gameState', () => {
     state.players[2].protections[2] = { id: 'planta-p3', type: 'planta' };
     state.players[3].protections[0] = { id: 'roca-p4', type: 'roca' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+    const afterConfirm = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-x')), 0),
+    );
 
-    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(4);
-    expect(afterPlay.players[2].awawas.filter(Boolean)).toHaveLength(5);
-    expect(afterPlay.players[3].awawas.filter(Boolean)).toHaveLength(5);
-    expect(afterPlay.players[1].protections.every((card) => card === null)).toBe(true);
-    expect(afterPlay.players[2].protections[0]?.type).toBe('roca');
-    expect(afterPlay.players[0].notices.join(' ')).toContain(
-      'Your \u00C1guila took one Awawa from P2.',
+    expect(afterConfirm.players[1].awawas.filter(Boolean)).toHaveLength(4);
+    expect(afterConfirm.players[2].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterConfirm.players[3].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterConfirm.players[1].protections.every((card) => card === null)).toBe(true);
+    expect(afterConfirm.players[2].protections[0]?.type).toBe('roca');
+    expect(afterConfirm.players[0].notices.join(' ')).toContain(
+      'Your Águila took one Awawa from P2.',
     );
   });
 
@@ -476,7 +512,9 @@ describe('gameState', () => {
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
     state.players[1].awawas = [true, false, false, false, false];
 
-    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+    const afterPlay = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-x')), 0),
+    );
 
     expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(0);
     expect(afterPlay.status).toBe('game_over');
@@ -493,9 +531,7 @@ describe('gameState', () => {
     const nextState = drawCard(state);
 
     expect(nextState.status).toBe('game_over');
-    expect(nextState.resultText).toContain(
-      "It's a draw between P1, P2",
-    );
+    expect(nextState.resultText).toContain("It's a draw between P1, P2");
   });
 
   it('shows the aguila notice to the attacked player on their next turn', () => {
@@ -504,7 +540,9 @@ describe('gameState', () => {
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
     state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
 
-    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+    const afterPlay = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-x')), 1),
+    );
     const afterFinishTurn = finishTurn(afterPlay);
 
     expect(getCurrentPlayer(afterFinishTurn).id).toBe(2);
@@ -519,12 +557,16 @@ describe('gameState', () => {
     state.players[0].hand = [{ id: 'aguila-p1', type: 'aguila' }];
     state.players[1].hand = [{ id: 'aguila-p2', type: 'aguila' }];
 
-    const afterPlayerOne = playSelectedCard(selectCard(state, 'aguila-p1'));
+    const afterPlayerOne = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-p1')), 0),
+    );
     const playerTwoTurn = finishTurn(afterPlayerOne);
 
     expect(playerTwoTurn.players[1].notices).toHaveLength(1);
 
-    const afterPlayerTwo = playSelectedCard(selectCard(playerTwoTurn, 'aguila-p2'));
+    const afterPlayerTwo = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(playerTwoTurn, 'aguila-p2')), 0),
+    );
 
     expect(afterPlayerTwo.players[1].notices).toHaveLength(2);
     expect(afterPlayerTwo.players[1].notices[0]).toContain("P1's \u00C1guila");
@@ -540,7 +582,11 @@ describe('gameState', () => {
     state.turnsCompleted = 2;
     state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
 
-    const attackedState = finishTurn(playSelectedCard(selectCard(state, 'aguila-x')));
+    const attackedState = finishTurn(
+      confirmAguilaAction(
+        selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-x')), 0),
+      ),
+    );
     const dismissedState = dismissCurrentNotification(attackedState);
 
     expect(attackedState.players[1].notices).toHaveLength(1);

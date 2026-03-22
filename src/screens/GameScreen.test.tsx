@@ -70,6 +70,7 @@ const baseProps = {
   colonyCount: 5,
   currentHand: [{ id: 'aguila-1', type: 'aguila' as const }],
   selectedCardId: null,
+  pendingTarget: null,
   canDraw: true,
   canThrow: false,
   canPlay: true,
@@ -82,7 +83,10 @@ const baseProps = {
   onFinishTurn: noop,
   onRestart: noop,
   onSelectCard: noop,
+  onSelectTargetSlot: noop,
   onPlayCard: noop,
+  onConfirmTarget: noop,
+  onCancelTarget: noop,
   onDropProtection: noop,
 };
 
@@ -218,6 +222,98 @@ describe('GameScreen', () => {
     const enabledThrowButton = tree.root.findByProps({ label: 'Throw Card' });
 
     expect(enabledThrowButton.props.disabled).toBe(false);
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('shows eat and cancel controls while choosing an aguila target', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'aguila',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0],
+            selectedSlotIndex: 0,
+          }}
+        />,
+      );
+    });
+
+    expect(findHostNodesByTestId(tree, 'target-action-header')).toHaveLength(1);
+    expect(findHostNodesByTestId(tree, 'current-player-hand')).toHaveLength(0);
+    expect(findHostNodesByTestId(tree, 'notification-box')).toHaveLength(0);
+    expect(tree.root.findByProps({ label: 'Eat' }).props.disabled).toBe(false);
+    expect(tree.root.findByProps({ label: 'Cancel' })).toBeDefined();
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('uses card-specific labels for other targeted actions', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'rey',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0, 1, 2, 3, 4],
+            selectedSlotIndex: 0,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Stole' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'solcito',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [1],
+            selectedSlotIndex: 1,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Send to Rest' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'gritar',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0],
+            selectedSlotIndex: 0,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Scare' })).toBeDefined();
 
     act(() => {
       tree.unmount();

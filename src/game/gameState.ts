@@ -127,6 +127,34 @@ function getAguilaTargetIndex(state: GameState) {
   return null;
 }
 
+function getAguilaValidSlotIndexes(player: PlayerState) {
+  const solcitoIndexes = player.awawas
+    .map((alive, slotIndex) =>
+      alive && player.protections[slotIndex]?.type === 'solcito'
+        ? slotIndex
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+
+  if (solcitoIndexes.length > 0) {
+    return solcitoIndexes;
+  }
+
+  return player.awawas
+    .map((alive, slotIndex) =>
+      alive && !player.protections[slotIndex] ? slotIndex : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
+function getSolcitoValidSlotIndexes(player: PlayerState) {
+  return player.protections
+    .map((protection, index) =>
+      player.awawas[index] && !protection ? index : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
 function getLeftPlayerIndexes(players: PlayerState[], currentIndex: number) {
   const indexes: number[] = [];
 
@@ -152,7 +180,11 @@ function isFirstRound(state: GameState) {
 }
 
 function canPlayAguila(state: GameState, player: PlayerState) {
-  return !player.hasPlayedCardThisTurn && !isFirstRound(state);
+  return (
+    !player.hasPlayedCardThisTurn &&
+    !isFirstRound(state) &&
+    getAguilaTargetIndex(state) !== null
+  );
 }
 
 function canPlayBebe(state: GameState, player: PlayerState) {
@@ -217,6 +249,19 @@ function getGritarTarget(state: GameState) {
   return null;
 }
 
+function getGritarValidSlotIndexes(player: PlayerState) {
+  return player.protections
+    .map((protection, index) =>
+      player.awawas[index] &&
+      !!protection &&
+      protection.type !== 'elefante' &&
+      protection.type !== 'solcito'
+        ? index
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
 function canPlayGritar(state: GameState, player: PlayerState) {
   return !player.hasPlayedCardThisTurn && !!getGritarTarget(state);
 }
@@ -238,6 +283,12 @@ function getReyTargetIndex(state: GameState) {
   }
 
   return targetIndex;
+}
+
+function getReyValidSlotIndexes(player: PlayerState) {
+  return player.awawas
+    .map((alive, index) => (alive ? index : -1))
+    .filter((slotIndex) => slotIndex !== -1);
 }
 
 function canPlayRey(state: GameState, player: PlayerState) {
@@ -280,6 +331,7 @@ export function createGameState(playerCount: number): GameState {
           colonyCount: GAME_CONFIG.initialColonySize,
           turnsCompleted: 0,
           selectedCardId: null,
+          pendingTargetAction: null,
           lastActionText: null,
           resultText: resolved.resultText,
           status: resolved.status,
@@ -299,6 +351,7 @@ export function createGameState(playerCount: number): GameState {
     colonyCount: GAME_CONFIG.initialColonySize,
     turnsCompleted: 0,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
@@ -322,10 +375,35 @@ export function canDrawCard(state: GameState) {
 
   return (
     state.status === 'playing' &&
+    !state.pendingTargetAction &&
     getAliveAwawaCount(player) > 0 &&
     player.hand.length < GAME_CONFIG.maxHandSize &&
     !player.hasDrawnThisTurn
   );
+}
+
+export function getPendingTarget(state: GameState) {
+  if (!state.pendingTargetAction) {
+    return null;
+  }
+
+  const targetPlayer = state.players[state.pendingTargetAction.targetPlayerIndex];
+
+  return {
+    type: state.pendingTargetAction.type,
+    playerId: targetPlayer.id,
+    protections: targetPlayer.protections,
+    awawas: targetPlayer.awawas,
+    validSlotIndexes:
+      state.pendingTargetAction.type === 'aguila'
+        ? getAguilaValidSlotIndexes(targetPlayer)
+        : state.pendingTargetAction.type === 'solcito'
+          ? getSolcitoValidSlotIndexes(targetPlayer)
+          : state.pendingTargetAction.type === 'gritar'
+            ? getGritarValidSlotIndexes(targetPlayer)
+            : getReyValidSlotIndexes(targetPlayer),
+    selectedSlotIndex: state.pendingTargetAction.selectedSlotIndex,
+  };
 }
 
 export function canThrowSelectedCard(state: GameState) {
@@ -334,6 +412,7 @@ export function canThrowSelectedCard(state: GameState) {
 
   return (
     state.status === 'playing' &&
+    !state.pendingTargetAction &&
     !!selectedCard &&
     currentPlayer.hand.length > 0 &&
     !currentPlayer.hasThrownCardThisTurn
@@ -351,6 +430,7 @@ export function drawCard(state: GameState): GameState {
     return {
       ...state,
       selectedCardId: null,
+      pendingTargetAction: null,
       lastActionText: null,
       resultText: buildDeckWinnerText(state.players),
       status: 'game_over',
@@ -375,6 +455,7 @@ export function drawCard(state: GameState): GameState {
     players,
     drawPile,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
@@ -392,6 +473,7 @@ export function selectCard(state: GameState, cardId: string): GameState {
   return {
     ...state,
     selectedCardId: state.selectedCardId === cardId ? null : cardId,
+    pendingTargetAction: null,
     lastActionText: null,
   };
 }
@@ -402,6 +484,7 @@ export function canPlaySelectedCard(state: GameState) {
 
   if (
     state.status !== 'playing' ||
+    state.pendingTargetAction !== null ||
     !selectedCard ||
     !canCardBePlayed(selectedCard)
   ) {
@@ -435,29 +518,13 @@ export function canPlaySelectedCard(state: GameState) {
   return false;
 }
 
-function killOnePreferredAwawa(player: PlayerState) {
-  const solcitoIndex = player.awawas.findIndex(
-    (alive, index) =>
-      alive && player.protections[index]?.type === 'solcito',
-  );
-
-  const targetIndex =
-    solcitoIndex !== -1
-      ? solcitoIndex
-      : player.awawas.findIndex(
-          (alive, index) => alive && !player.protections[index],
-        );
-
-  if (targetIndex === -1) {
-    return {
-      player,
-      targetType: null as 'solcito' | 'unprotected' | null,
-    };
-  }
-
+function killAwawaAtSlot(player: PlayerState, targetIndex: number) {
   const awawas = [...player.awawas];
   const protections = [...player.protections];
-  const targetType = solcitoIndex !== -1 ? 'solcito' : 'unprotected';
+  const targetType =
+    player.protections[targetIndex]?.type === 'solcito'
+      ? 'solcito'
+      : 'unprotected';
 
   awawas[targetIndex] = false;
   protections[targetIndex] = null;
@@ -472,10 +539,90 @@ function killOnePreferredAwawa(player: PlayerState) {
   };
 }
 
-function playAguila(state: GameState, selectedCard: Card): GameState {
-  const actorId = state.players[state.currentPlayerIndex].id;
-  const impactMessages: string[] = [];
+function beginAguilaAction(state: GameState): GameState {
   const targetPlayerIndex = getAguilaTargetIndex(state);
+
+  if (targetPlayerIndex === null) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'aguila',
+      targetPlayerIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
+
+export function selectTargetSlot(
+  state: GameState,
+  slotIndex: number,
+): GameState {
+  const pendingAction = state.pendingTargetAction;
+
+  if (!pendingAction) {
+    return state;
+  }
+
+  const targetPlayer = state.players[pendingAction.targetPlayerIndex];
+  const validSlotIndexes =
+    pendingAction.type === 'aguila'
+      ? getAguilaValidSlotIndexes(targetPlayer)
+      : pendingAction.type === 'solcito'
+        ? getSolcitoValidSlotIndexes(targetPlayer)
+        : pendingAction.type === 'gritar'
+          ? getGritarValidSlotIndexes(targetPlayer)
+          : getReyValidSlotIndexes(targetPlayer);
+
+  if (!validSlotIndexes.includes(slotIndex)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      ...pendingAction,
+      selectedSlotIndex: slotIndex,
+    },
+  };
+}
+
+export function cancelTargetAction(state: GameState): GameState {
+  if (!state.pendingTargetAction) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: null,
+  };
+}
+
+function resolveAguilaAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'aguila' ||
+    pendingAction.type !== 'aguila' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const targetPlayer = state.players[pendingAction.targetPlayerIndex];
+  const selectedSlotIndex = pendingAction.selectedSlotIndex;
+
+  if (
+    !getAguilaValidSlotIndexes(targetPlayer).includes(selectedSlotIndex)
+  ) {
+    return state;
+  }
 
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex) {
@@ -486,21 +633,16 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
       };
     }
 
-    if (index !== targetPlayerIndex) {
+    if (index !== pendingAction.targetPlayerIndex) {
       return player;
     }
 
-    const { player: attackedPlayer, targetType } = killOnePreferredAwawa(player);
+    const { player: attackedPlayer, targetType } = killAwawaAtSlot(
+      player,
+      selectedSlotIndex,
+    );
     const awawaLost =
       getAliveAwawaCount(attackedPlayer) < getAliveAwawaCount(player);
-
-    impactMessages.push(
-      awawaLost
-        ? `Your \u00C1guila took one Awawa from P${player.id}.`
-        : targetType === 'unprotected'
-          ? `Your \u00C1guila removed protections from P${player.id}.`
-          : `Your \u00C1guila could not reach an unprotected Awawa from P${player.id}.`,
-    );
 
     return {
       ...attackedPlayer,
@@ -520,12 +662,6 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
   });
 
   const resolved = getResolvedGameStatus(state.drawPile, players);
-  const actorMessages =
-    resolved.status === 'game_over'
-      ? []
-      : impactMessages.length > 0
-        ? impactMessages
-        : ['Your Águila could not reach any unprotected Awawa.'];
 
   return {
     ...state,
@@ -533,11 +669,18 @@ function playAguila(state: GameState, selectedCard: Card): GameState {
       index === state.currentPlayerIndex
         ? {
             ...player,
-            notices: [...player.notices, ...actorMessages],
+            notices:
+              resolved.status === 'game_over'
+                ? player.notices
+                : [
+                    ...player.notices,
+                    `Your Águila took one Awawa from P${targetPlayer.id}.`,
+                  ],
           }
         : player,
     ),
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
@@ -565,6 +708,7 @@ export function throwSelectedCard(state: GameState): GameState {
     ...state,
     players,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
   };
 }
@@ -601,17 +745,49 @@ function playBebe(state: GameState, selectedCard: Card): GameState {
     players,
     colonyCount,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
 }
 
-function playSolcito(state: GameState, selectedCard: Card): GameState {
-  const actorId = state.players[state.currentPlayerIndex].id;
+function beginSolcitoAction(state: GameState): GameState {
   const target = getNextSolcitoTarget(state);
 
   if (!target) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'solcito',
+      targetPlayerIndex: target.playerIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
+
+function confirmSolcitoAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'solcito' ||
+    pendingAction.type !== 'solcito' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const target = pendingAction;
+  const selectedSlotIndex = target.selectedSlotIndex;
+
+  if (selectedSlotIndex === null) {
     return state;
   }
 
@@ -624,12 +800,12 @@ function playSolcito(state: GameState, selectedCard: Card): GameState {
       };
     }
 
-    if (index !== target.playerIndex) {
+    if (index !== target.targetPlayerIndex) {
       return player;
     }
 
     const protections = [...player.protections];
-    protections[target.slotIndex] = {
+    protections[selectedSlotIndex] = {
       id: `${selectedCard.id}-target-${player.id}`,
       type: 'solcito',
       sourcePlayerId: actorId,
@@ -649,7 +825,7 @@ function playSolcito(state: GameState, selectedCard: Card): GameState {
   const actorMessage =
     resolved.status === 'game_over'
       ? null
-      : `Your Solcito landed on P${players[target.playerIndex].id}.`;
+      : `Your Solcito landed on P${players[target.targetPlayerIndex].id}.`;
 
   return {
     ...state,
@@ -662,6 +838,7 @@ function playSolcito(state: GameState, selectedCard: Card): GameState {
         : player,
     ),
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
@@ -697,17 +874,49 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
     ...state,
     players,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
 }
 
-function playGritar(state: GameState, selectedCard: Card): GameState {
-  const actorId = state.players[state.currentPlayerIndex].id;
+function beginGritarAction(state: GameState): GameState {
   const target = getGritarTarget(state);
 
   if (!target) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'gritar',
+      targetPlayerIndex: target.playerIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
+
+function confirmGritarAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'gritar' ||
+    pendingAction.type !== 'gritar' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const target = pendingAction;
+  const selectedSlotIndex = target.selectedSlotIndex;
+
+  if (selectedSlotIndex === null) {
     return state;
   }
 
@@ -717,16 +926,16 @@ function playGritar(state: GameState, selectedCard: Card): GameState {
         ...player,
         hand: player.hand.filter((card) => card.id !== selectedCard.id),
         hasPlayedCardThisTurn: true,
-        notices: [...player.notices, `Your Gritar removed one protection from P${state.players[target.playerIndex].id}.`],
+        notices: [...player.notices, `Your Gritar removed one protection from P${state.players[target.targetPlayerIndex].id}.`],
       };
     }
 
-    if (index !== target.playerIndex) {
+    if (index !== target.targetPlayerIndex) {
       return player;
     }
 
     const protections = [...player.protections];
-    protections[target.slotIndex] = null;
+    protections[selectedSlotIndex] = null;
 
     return {
       ...player,
@@ -741,25 +950,56 @@ function playGritar(state: GameState, selectedCard: Card): GameState {
     ...state,
     players,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
   };
 }
 
-function playRey(state: GameState, selectedCard: Card): GameState {
-  const actorId = state.players[state.currentPlayerIndex].id;
-  const currentPlayer = getCurrentPlayer(state);
+function beginReyAction(state: GameState): GameState {
   const targetIndex = getReyTargetIndex(state);
-  const missingSlotIndex = getMissingAwawaSlotIndex(currentPlayer);
 
-  if (targetIndex === null || missingSlotIndex === -1) {
+  if (targetIndex === null) {
     return state;
   }
 
-  const stolenSlotIndex = state.players[targetIndex].awawas.findIndex(Boolean);
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'rey',
+      targetPlayerIndex: targetIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
 
-  if (stolenSlotIndex === -1) {
+function confirmReyAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'rey' ||
+    pendingAction.type !== 'rey' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const actorId = state.players[state.currentPlayerIndex].id;
+  const currentPlayer = getCurrentPlayer(state);
+  const missingSlotIndex = getMissingAwawaSlotIndex(currentPlayer);
+
+  if (missingSlotIndex === -1) {
+    return state;
+  }
+
+  const targetIndex = pendingAction.targetPlayerIndex;
+  const stolenSlotIndex = pendingAction.selectedSlotIndex;
+
+  if (!state.players[targetIndex].awawas[stolenSlotIndex]) {
     return state;
   }
 
@@ -800,6 +1040,7 @@ function playRey(state: GameState, selectedCard: Card): GameState {
     ...state,
     players,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
@@ -818,7 +1059,7 @@ export function playSelectedCard(state: GameState): GameState {
   }
 
   if (selectedCard.type === 'aguila') {
-    return playAguila(state, selectedCard);
+    return beginAguilaAction(state);
   }
 
   if (selectedCard.type === 'bebe') {
@@ -826,7 +1067,7 @@ export function playSelectedCard(state: GameState): GameState {
   }
 
   if (selectedCard.type === 'solcito') {
-    return playSolcito(state, selectedCard);
+    return beginSolcitoAction(state);
   }
 
   if (selectedCard.type === 'elefante') {
@@ -834,14 +1075,47 @@ export function playSelectedCard(state: GameState): GameState {
   }
 
   if (selectedCard.type === 'gritar') {
-    return playGritar(state, selectedCard);
+    return beginGritarAction(state);
   }
 
   if (selectedCard.type === 'rey') {
-    return playRey(state, selectedCard);
+    return beginReyAction(state);
   }
 
   return state;
+}
+
+export function confirmTargetAction(state: GameState): GameState {
+  const pendingAction = state.pendingTargetAction;
+
+  if (!pendingAction) {
+    return state;
+  }
+
+  if (pendingAction.type === 'aguila') {
+    return resolveAguilaAction(state);
+  }
+
+  if (pendingAction.type === 'solcito') {
+    return confirmSolcitoAction(state);
+  }
+
+  if (pendingAction.type === 'gritar') {
+    return confirmGritarAction(state);
+  }
+
+  if (pendingAction.type === 'rey') {
+    return confirmReyAction(state);
+  }
+
+  return state;
+}
+
+export const getPendingAguilaTarget = getPendingTarget;
+export const selectAguilaTargetSlot = selectTargetSlot;
+export const cancelAguilaAction = cancelTargetAction;
+export function confirmAguilaAction(state: GameState): GameState {
+  return confirmTargetAction(state);
 }
 
 export function placeCardInProtection(
@@ -884,6 +1158,7 @@ export function placeCardInProtection(
     players,
     selectedCardId:
       state.selectedCardId === cardId ? null : state.selectedCardId,
+    pendingTargetAction: null,
     lastActionText: null,
   };
 }
@@ -920,6 +1195,7 @@ export function finishTurn(state: GameState): GameState {
     currentPlayerIndex: nextPlayerIndex,
     turnsCompleted: state.turnsCompleted + 1,
     selectedCardId: null,
+    pendingTargetAction: null,
     lastActionText: null,
   };
 }

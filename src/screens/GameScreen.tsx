@@ -23,6 +23,14 @@ type GameScreenProps = {
   colonyCount: number;
   currentHand: Card[];
   selectedCardId: string | null;
+  pendingTarget: {
+    type: 'aguila' | 'solcito' | 'gritar' | 'rey';
+    playerId: number;
+    protections: Array<Card | null>;
+    awawas: boolean[];
+    validSlotIndexes: number[];
+    selectedSlotIndex: number | null;
+  } | null;
   canDraw: boolean;
   canThrow: boolean;
   canPlay: boolean;
@@ -35,7 +43,10 @@ type GameScreenProps = {
   onFinishTurn: () => void;
   onRestart: () => void;
   onSelectCard: (cardId: string) => void;
+  onSelectTargetSlot: (slotIndex: number) => void;
   onPlayCard: () => void;
+  onConfirmTarget: () => void;
+  onCancelTarget: () => void;
   onDropProtection: (cardId: string, slotIndex: number) => void;
 };
 
@@ -47,6 +58,7 @@ export function GameScreen({
   colonyCount,
   currentHand,
   selectedCardId,
+  pendingTarget,
   canDraw,
   canThrow,
   canPlay,
@@ -59,7 +71,10 @@ export function GameScreen({
   onFinishTurn,
   onRestart,
   onSelectCard,
+  onSelectTargetSlot,
   onPlayCard,
+  onConfirmTarget,
+  onCancelTarget,
   onDropProtection,
 }: GameScreenProps) {
   const slotRefs = useMemo(
@@ -74,10 +89,35 @@ export function GameScreen({
   const defaultMessage = 'Protect your Awawas or play a card.';
   const activeNotification = notificationMessages[0] ?? defaultMessage;
   const hasDismissibleNotification = notificationMessages.length > 0;
-  const visiblePlayerId = peekPlayerId ?? currentPlayer;
-  const visibleBoard =
-    playerBoards.find((player) => player.id === visiblePlayerId) ?? playerBoards[0];
-  const isPeeking = peekPlayerId !== null;
+  const isChoosingTarget = pendingTarget !== null;
+  const visiblePlayerId = isChoosingTarget
+    ? pendingTarget.playerId
+    : peekPlayerId ?? currentPlayer;
+  const peekedPlayer = playerBoards.find((player) => player.id === visiblePlayerId);
+  const visibleBoard = isChoosingTarget
+    ? pendingTarget
+    : peekedPlayer ?? playerBoards[0];
+  const isPeeking = !isChoosingTarget && peekPlayerId !== null;
+  const targetActionLabel =
+    pendingTarget?.type === 'aguila'
+      ? 'Eat'
+      : pendingTarget?.type === 'solcito'
+        ? 'Send to Rest'
+        : pendingTarget?.type === 'gritar'
+          ? 'Scare'
+          : pendingTarget?.type === 'rey'
+            ? 'Stole'
+            : null;
+  const targetPrompt =
+    pendingTarget?.type === 'aguila'
+      ? `Choose an Awawa from P${pendingTarget.playerId}`
+      : pendingTarget?.type === 'solcito'
+        ? `Choose where to send Solcito on P${pendingTarget.playerId}`
+        : pendingTarget?.type === 'gritar'
+          ? `Choose an Awawa to scare on P${pendingTarget.playerId}`
+          : pendingTarget?.type === 'rey'
+            ? `Choose an Awawa to stole from P${pendingTarget.playerId}`
+            : '';
 
   const measureSlot = (slotIndex: number) => {
     const slotRef = slotRefs[slotIndex];
@@ -123,12 +163,12 @@ export function GameScreen({
                   key={player.id}
                   disabled={player.id === currentPlayer}
                   onPressIn={
-                    player.id === currentPlayer
+                    player.id === currentPlayer || isChoosingTarget
                       ? undefined
                       : () => setPeekPlayerId(player.id)
                   }
                   onPressOut={
-                    player.id === currentPlayer
+                    player.id === currentPlayer || isChoosingTarget
                       ? undefined
                       : () => setPeekPlayerId(null)
                   }
@@ -190,7 +230,7 @@ export function GameScreen({
             </View>
           ) : (
             <View style={styles.playArea}>
-              {!isPeeking ? (
+              {!isPeeking && !isChoosingTarget ? (
                 <View style={styles.handArea} testID="current-player-hand">
                   <PlayerHand
                     cards={currentHand}
@@ -200,18 +240,26 @@ export function GameScreen({
                     onDropProtection={onDropProtection}
                   />
                 </View>
-              ) : (
+              ) : !isChoosingTarget ? (
                 <View style={styles.peekHeader} testID="peek-board-header">
-                  <Text style={styles.peekTitle}>{`Viewing P${visibleBoard.id}`}</Text>
+                  <Text style={styles.peekTitle}>{`Viewing P${visiblePlayerId}`}</Text>
                 </View>
-              )}
+              ) : null}
+              {isChoosingTarget ? (
+                <View style={styles.peekHeader} testID="target-action-header">
+                  <Text style={styles.peekTitle}>{targetPrompt}</Text>
+                </View>
+              ) : null}
               <AwawaSlots
                 protections={visibleBoard.protections}
                 awawas={visibleBoard.awawas}
                 slotRefs={slotRefs}
                 onSlotLayout={handleSlotLayout}
+                selectableSlotIndexes={pendingTarget ? pendingTarget.validSlotIndexes : []}
+                selectedSlotIndex={pendingTarget?.selectedSlotIndex ?? null}
+                onPressAwawaSlot={onSelectTargetSlot}
               />
-              {!isPeeking ? (
+              {!isPeeking && !isChoosingTarget ? (
                 <View style={styles.alertBox} testID="notification-box">
                   <View style={styles.alertMessage}>
                     <Text
@@ -240,15 +288,20 @@ export function GameScreen({
           <View style={styles.buttonRow}>
             <View style={styles.buttonWrap}>
               <PrimaryButton
-                label="Play Card"
-                onPress={onPlayCard}
-                disabled={gameOver || !canPlay}
+                label={isChoosingTarget ? targetActionLabel ?? 'Play Card' : 'Play Card'}
+                onPress={isChoosingTarget ? onConfirmTarget : onPlayCard}
+                disabled={
+                  gameOver ||
+                  (isChoosingTarget
+                    ? pendingTarget?.selectedSlotIndex === null
+                    : !canPlay)
+                }
               />
             </View>
             <View style={styles.buttonWrap}>
               <PrimaryButton
-                label="Finish Turn"
-                onPress={onFinishTurn}
+                label={isChoosingTarget ? 'Cancel' : 'Finish Turn'}
+                onPress={isChoosingTarget ? onCancelTarget : onFinishTurn}
                 disabled={gameOver}
                 variant="outline"
               />

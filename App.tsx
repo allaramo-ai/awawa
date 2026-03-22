@@ -5,13 +5,17 @@ import {
   canDrawCard,
   canThrowSelectedCard,
   canPlaySelectedCard,
+  cancelTargetAction,
+  confirmTargetAction,
   createGameState,
   dismissCurrentNotification,
   drawCard as drawGameCard,
   finishTurn as finishGameTurn,
+  getPendingTarget,
   getCurrentPlayer,
   placeCardInProtection,
   playSelectedCard,
+  selectTargetSlot,
   selectCard,
   throwSelectedCard as throwGameCard,
 } from './src/game/gameState';
@@ -64,6 +68,24 @@ export default function App() {
     );
   };
 
+  const handleSelectTargetSlot = (slotIndex: number) => {
+    setGameState((currentState) =>
+      currentState ? selectTargetSlot(currentState, slotIndex) : currentState,
+    );
+  };
+
+  const handleConfirmTarget = () => {
+    setGameState((currentState) =>
+      currentState ? confirmTargetAction(currentState) : currentState,
+    );
+  };
+
+  const handleCancelTarget = () => {
+    setGameState((currentState) =>
+      currentState ? cancelTargetAction(currentState) : currentState,
+    );
+  };
+
   const handleDropProtection = (cardId: string, slotIndex: number) => {
     setGameState((currentState) =>
       currentState
@@ -102,6 +124,7 @@ export default function App() {
   const currentPlayer = getCurrentPlayer(gameState);
   const gameOver = gameState.status === 'game_over';
   const notificationMessages = currentPlayer.notices;
+  const pendingTarget = getPendingTarget(gameState);
 
   return (
     <>
@@ -118,6 +141,7 @@ export default function App() {
         colonyCount={gameState.colonyCount}
         currentHand={currentPlayer.hand}
         selectedCardId={gameState.selectedCardId}
+        pendingTarget={pendingTarget}
         canDraw={canDrawCard(gameState)}
         canThrow={canThrowSelectedCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}
@@ -130,7 +154,10 @@ export default function App() {
         onFinishTurn={finishTurn}
         onRestart={restartGame}
         onSelectCard={handleSelectCard}
+        onSelectTargetSlot={handleSelectTargetSlot}
         onPlayCard={handlePlayCard}
+        onConfirmTarget={handleConfirmTarget}
+        onCancelTarget={handleCancelTarget}
         onDropProtection={handleDropProtection}
       />
     </>

@@ -1,5 +1,5 @@
 import { RefObject } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getCardLabel } from '../game/cards';
 import { Card } from '../game/types';
@@ -13,6 +13,9 @@ type AwawaSlotsProps = {
   awawas: boolean[];
   slotRefs: SlotRef[];
   onSlotLayout: (slotIndex: number) => void;
+  selectableSlotIndexes?: number[];
+  selectedSlotIndex?: number | null;
+  onPressAwawaSlot?: (slotIndex: number) => void;
 };
 
 export function AwawaSlots({
@@ -20,6 +23,9 @@ export function AwawaSlots({
   awawas,
   slotRefs,
   onSlotLayout,
+  selectableSlotIndexes = [],
+  selectedSlotIndex = null,
+  onPressAwawaSlot,
 }: AwawaSlotsProps) {
   return (
     <View style={styles.container}>
@@ -40,12 +46,19 @@ export function AwawaSlots({
 
       <View style={styles.row}>
         {awawas.map((alive, index) => (
-          <View
+          <Pressable
             key={`awawa-${index}`}
-            style={[styles.slot, !alive && styles.hiddenSlot]}
+            disabled={!selectableSlotIndexes.includes(index)}
+            onPress={() => onPressAwawaSlot?.(index)}
+            style={[
+              styles.slot,
+              !alive && styles.hiddenSlot,
+              selectableSlotIndexes.includes(index) && styles.selectableSlot,
+              selectedSlotIndex === index && styles.selectedSlot,
+            ]}
           >
             <Text style={styles.label}>{alive ? 'Awawa' : ''}</Text>
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>
@@ -75,6 +88,12 @@ const styles = StyleSheet.create({
   hiddenSlot: {
     backgroundColor: 'transparent',
     borderColor: 'transparent',
+  },
+  selectableSlot: {
+    borderColor: colors.accent,
+  },
+  selectedSlot: {
+    backgroundColor: colors.surfaceMuted,
   },
   label: {
     color: colors.textPrimary,

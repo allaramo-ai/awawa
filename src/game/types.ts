@@ -37,6 +37,14 @@ export type PlayerState = {
 
 export type GameStatus = 'playing' | 'game_over';
 
+export type PendingTargetActionType = 'aguila' | 'solcito' | 'gritar' | 'rey';
+
+export type PendingTargetAction = {
+  type: PendingTargetActionType;
+  targetPlayerIndex: number;
+  selectedSlotIndex: number | null;
+};
+
 export type GameState = {
   players: PlayerState[];
   currentPlayerIndex: number;
@@ -44,6 +52,7 @@ export type GameState = {
   colonyCount: number;
   turnsCompleted: number;
   selectedCardId: string | null;
+  pendingTargetAction: PendingTargetAction | null;
   lastActionText: string | null;
   resultText: string | null;
   status: GameStatus;
