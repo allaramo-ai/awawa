@@ -1,6 +1,6 @@
 import { GAME_CONFIG } from '../constants/game';
 import { buildConfiguredDeck, canCardBePlayed, canCardProtect } from './cards';
-import { Card, GameState, PlayerState } from './types';
+import { Card, GameState, PendingTargetAction, PlayerState } from './types';
 
 function createPlayers(playerCount: number): PlayerState[] {
   return Array.from({ length: playerCount }, (_, index) => ({
@@ -37,9 +37,11 @@ function isTemporaryProtection(card: Card | null) {
   return (
     card?.type === 'solcito' ||
     card?.type === 'correr' ||
+    card?.type === 'escalar' ||
     card?.type === 'elefante' ||
     card?.type === 'toilet' ||
-    card?.type === 'oloroso'
+    card?.type === 'oloroso' ||
+    card?.type === 'exploring'
   );
 }
 
@@ -212,6 +214,70 @@ function getRightPlayerIndex(players: PlayerState[], currentIndex: number) {
   return currentIndex;
 }
 
+function getRightPlayerIndexes(players: PlayerState[], currentIndex: number) {
+  const indexes: number[] = [];
+
+  for (let step = 1; step < players.length; step += 1) {
+    const index = (currentIndex + step) % players.length;
+
+    if (getAliveAwawaCount(players[index]) > 0) {
+      indexes.push(index);
+    }
+  }
+
+  return indexes;
+}
+
+function getProtectionSlotIndexesByType(
+  player: PlayerState,
+  types: Card['type'][],
+) {
+  return player.protections
+    .map((protection, index) =>
+      player.awawas[index] && protection && types.includes(protection.type)
+        ? index
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
+function getFirstRightPlayerWithProtection(
+  players: PlayerState[],
+  currentIndex: number,
+  protectionTypes: Card['type'][],
+) {
+  const rightIndexes = getRightPlayerIndexes(players, currentIndex);
+
+  for (const playerIndex of rightIndexes) {
+    const slotIndexes = getProtectionSlotIndexesByType(
+      players[playerIndex],
+      protectionTypes,
+    );
+
+    if (slotIndexes.length > 0) {
+      return { playerIndex, slotIndexes };
+    }
+  }
+
+  return null;
+}
+
+function getExplorarTargetFromPlayer(
+  players: PlayerState[],
+  currentPlayerIndex: number,
+) {
+  for (const playerIndex of getRightPlayerIndexes(players, currentPlayerIndex)) {
+    const player = players[playerIndex];
+    const slotIndex = player.awawas.findIndex((alive) => alive);
+
+    if (slotIndex !== -1) {
+      return { playerIndex, slotIndex };
+    }
+  }
+
+  return null;
+}
+
 function getAguilaTargetIndex(state: GameState) {
   for (let step = 1; step < state.players.length; step += 1) {
     const index = (state.currentPlayerIndex + step) % state.players.length;
@@ -226,6 +292,7 @@ function getAguilaTargetIndex(state: GameState) {
         alive &&
         (player.protections[slotIndex]?.type === 'awawa' ||
           player.protections[slotIndex]?.type === 'solcito' ||
+          player.protections[slotIndex]?.type === 'exploring' ||
           player.protections[slotIndex]?.type === 'escaping' ||
           !player.protections[slotIndex]),
     );
@@ -253,7 +320,9 @@ function getAguilaValidSlotIndexes(player: PlayerState) {
 
   const solcitoIndexes = player.awawas
     .map((alive, slotIndex) =>
-      alive && player.protections[slotIndex]?.type === 'solcito'
+      alive &&
+      (player.protections[slotIndex]?.type === 'solcito' ||
+        player.protections[slotIndex]?.type === 'exploring')
         ? slotIndex
         : -1,
     )
@@ -330,6 +399,41 @@ function getOlorosoValidSlotIndexes(player: PlayerState) {
     .filter((slotIndex) => slotIndex !== -1);
 }
 
+function getEscalarRocaValidSlotIndexes(player: PlayerState) {
+  return getProtectionSlotIndexesByType(player, ['roca']);
+}
+
+function getEatTarget(state: GameState) {
+  const target = getFirstRightPlayerWithProtection(
+    state.players,
+    state.currentPlayerIndex,
+    ['planta'],
+  );
+
+  if (!target) {
+    return null;
+  }
+
+  return {
+    playerIndex: target.playerIndex,
+    slotIndex: target.slotIndexes[0],
+  };
+}
+
+function getEatValidSlotIndexes(player: PlayerState) {
+  return getProtectionSlotIndexesByType(player, ['planta']);
+}
+
+function getExplorarTarget(state: GameState) {
+  return getExplorarTargetFromPlayer(state.players, state.currentPlayerIndex);
+}
+
+function getExplorarValidSlotIndexes(player: PlayerState) {
+  return player.awawas
+    .map((alive, slotIndex) => (alive ? slotIndex : -1))
+    .filter((slotIndex) => slotIndex !== -1);
+}
+
 function getAwawaCaptureTarget(state: GameState) {
   for (let step = 1; step < state.players.length; step += 1) {
     const index = (state.currentPlayerIndex + step) % state.players.length;
@@ -349,6 +453,14 @@ function getAwawaCaptureTarget(state: GameState) {
   }
 
   return null;
+}
+
+function getAwawaCaptureValidSlotIndexes(player: PlayerState) {
+  return player.awawas
+    .map((alive, slotIndex) =>
+      alive && !player.protections[slotIndex] ? slotIndex : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
 }
 
 function getLeftPlayerIndexes(players: PlayerState[], currentIndex: number) {
@@ -437,6 +549,22 @@ function canPlayOloroso(state: GameState, player: PlayerState) {
   return player.playedCardsThisTurn < 2 && !!getOlorosoTarget(state);
 }
 
+function canUseEscalar(state: GameState) {
+  return !!getFirstRightPlayerWithProtection(
+    state.players,
+    state.currentPlayerIndex,
+    ['roca'],
+  );
+}
+
+function canPlayEat(state: GameState, player: PlayerState) {
+  return player.playedCardsThisTurn < 2 && !!getEatTarget(state);
+}
+
+function canPlayExplorar(state: GameState, player: PlayerState) {
+  return player.playedCardsThisTurn < 2 && !!getExplorarTarget(state);
+}
+
 function getGritarTarget(state: GameState) {
   const leftIndexes = getLeftPlayerIndexes(
     state.players,
@@ -514,8 +642,16 @@ function canPlayRey(state: GameState, player: PlayerState) {
   );
 }
 
-function clearTemporaryProtections(player: PlayerState) {
-    const protections: Array<Card | null> = player.protections.map((protection) => {
+function processStartOfTurn(
+  players: PlayerState[],
+  currentPlayerIndex: number,
+): {
+  players: PlayerState[];
+  pendingTargetAction: PendingTargetAction | null;
+} {
+  const currentPlayer = players[currentPlayerIndex];
+  const expiredTypes: Card['type'][] = [];
+  const protections: Array<Card | null> = currentPlayer.protections.map((protection) => {
     if (!protection || !isTemporaryProtection(protection)) {
       return protection;
     }
@@ -524,6 +660,7 @@ function clearTemporaryProtections(player: PlayerState) {
       ?? GAME_CONFIG.temporaryProtectionTurnStarts;
 
     if (remainingTurnStarts <= 1) {
+      expiredTypes.push(protection.type);
       return null;
     }
 
@@ -533,11 +670,41 @@ function clearTemporaryProtections(player: PlayerState) {
     };
   });
 
+  const nextPlayers = [...players];
+  nextPlayers[currentPlayerIndex] = syncEscapingMarkers({
+    ...currentPlayer,
+    protections,
+  });
+
+  const hasExpiredEscalar = expiredTypes.includes('escalar');
+  const rocaTarget = hasExpiredEscalar
+    ? getFirstRightPlayerWithProtection(nextPlayers, currentPlayerIndex, ['roca'])
+    : null;
+
+  const hasExpiredExploring = expiredTypes.includes('exploring');
+  const explorarTarget = hasExpiredExploring
+    ? getExplorarTargetFromPlayer(nextPlayers, currentPlayerIndex)
+    : null;
+
   return {
-    ...syncEscapingMarkers({
-      ...player,
-      protections,
-    }),
+    players: nextPlayers,
+    pendingTargetAction: rocaTarget
+      ? {
+          type: 'escalar',
+          targetPlayerIndex: rocaTarget.playerIndex,
+          selectedSlotIndex: null,
+          sourcePlayerId: nextPlayers[currentPlayerIndex].id,
+          consumesSelectedCard: false,
+        }
+      : explorarTarget
+      ? {
+          type: 'explorar',
+          targetPlayerIndex: explorarTarget.playerIndex,
+          selectedSlotIndex: null,
+          sourcePlayerId: nextPlayers[currentPlayerIndex].id,
+          consumesSelectedCard: false,
+        }
+      : null,
   };
 }
 
@@ -625,10 +792,18 @@ export function getPendingTarget(state: GameState) {
     validSlotIndexes:
       state.pendingTargetAction.type === 'aguila'
         ? getAguilaValidSlotIndexes(targetPlayer)
-        : state.pendingTargetAction.type === 'solcito'
+      : state.pendingTargetAction.type === 'awawa'
+        ? getAwawaCaptureValidSlotIndexes(targetPlayer)
+      : state.pendingTargetAction.type === 'solcito'
           ? getSolcitoValidSlotIndexes(targetPlayer)
           : state.pendingTargetAction.type === 'oloroso'
             ? getOlorosoValidSlotIndexes(targetPlayer)
+          : state.pendingTargetAction.type === 'escalar'
+            ? getEscalarRocaValidSlotIndexes(targetPlayer)
+          : state.pendingTargetAction.type === 'eat'
+            ? getEatValidSlotIndexes(targetPlayer)
+          : state.pendingTargetAction.type === 'explorar'
+            ? getExplorarValidSlotIndexes(targetPlayer)
           : state.pendingTargetAction.type === 'gritar'
             ? getGritarValidSlotIndexes(targetPlayer)
             : getReyValidSlotIndexes(targetPlayer),
@@ -743,6 +918,14 @@ export function canPlaySelectedCard(state: GameState) {
     return canPlayOloroso(state, currentPlayer);
   }
 
+  if (selectedCard.type === 'eat') {
+    return canPlayEat(state, currentPlayer);
+  }
+
+  if (selectedCard.type === 'explorar') {
+    return canPlayExplorar(state, currentPlayer);
+  }
+
   if (selectedCard.type === 'gritar') {
     return canPlayGritar(state, currentPlayer);
   }
@@ -762,6 +945,8 @@ function killAwawaAtSlot(player: PlayerState, targetIndex: number) {
       ? 'awawa'
       : player.protections[targetIndex]?.type === 'solcito'
         ? 'solcito'
+        : player.protections[targetIndex]?.type === 'exploring'
+          ? 'exploring'
         : player.protections[targetIndex]?.type === 'escaping'
           ? 'escaping'
           : 'unprotected';
@@ -812,10 +997,18 @@ export function selectTargetSlot(
   const validSlotIndexes =
     pendingAction.type === 'aguila'
       ? getAguilaValidSlotIndexes(targetPlayer)
+    : pendingAction.type === 'awawa'
+      ? getAwawaCaptureValidSlotIndexes(targetPlayer)
       : pendingAction.type === 'solcito'
         ? getSolcitoValidSlotIndexes(targetPlayer)
         : pendingAction.type === 'oloroso'
           ? getOlorosoValidSlotIndexes(targetPlayer)
+        : pendingAction.type === 'escalar'
+          ? getEscalarRocaValidSlotIndexes(targetPlayer)
+        : pendingAction.type === 'eat'
+          ? getEatValidSlotIndexes(targetPlayer)
+        : pendingAction.type === 'explorar'
+          ? getExplorarValidSlotIndexes(targetPlayer)
         : pendingAction.type === 'gritar'
           ? getGritarValidSlotIndexes(targetPlayer)
           : getReyValidSlotIndexes(targetPlayer);
@@ -1001,6 +1194,115 @@ function playBebe(state: GameState, selectedCard: Card): GameState {
     lastActionText: null,
     resultText: resolved.resultText,
     status: resolved.status,
+  };
+}
+
+function confirmAwawaAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'awawa' ||
+    pendingAction.type !== 'awawa' ||
+    pendingAction.selectedSlotIndex === null ||
+    pendingAction.protectionSlotIndex === undefined
+  ) {
+    return state;
+  }
+
+  const targetIndex = pendingAction.targetPlayerIndex;
+  const targetSlotIndex = pendingAction.selectedSlotIndex;
+  const protectionSlotIndex = pendingAction.protectionSlotIndex;
+
+  if (!getAwawaCaptureValidSlotIndexes(state.players[targetIndex]).includes(targetSlotIndex)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      const protections = [...player.protections];
+      protections[protectionSlotIndex] = {
+        id: `${selectedCard.id}-captured-p${state.players[targetIndex].id}`,
+        type: 'awawa',
+        sourcePlayerId: state.players[targetIndex].id,
+      };
+
+      return {
+        ...player,
+        hand: player.hand.filter((handCard) => handCard.id !== selectedCard.id),
+        protections,
+      };
+    }
+
+    if (index !== targetIndex) {
+      return player;
+    }
+
+    const awawas = [...player.awawas];
+    const protections = [...player.protections];
+    awawas[targetSlotIndex] = false;
+    protections[targetSlotIndex] = null;
+
+    return {
+      ...player,
+      awawas,
+      protections,
+    };
+  });
+
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
+
+  return {
+    ...state,
+    players: nextPlayers,
+    selectedCardId: null,
+    pendingTargetAction: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+function confirmEscalarAction(state: GameState) {
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    pendingAction.type !== 'escalar' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const targetIndex = pendingAction.targetPlayerIndex;
+  const selectedSlotIndex = pendingAction.selectedSlotIndex;
+
+  if (!getEscalarRocaValidSlotIndexes(state.players[targetIndex]).includes(selectedSlotIndex)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index !== targetIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[selectedSlotIndex] = null;
+
+    return {
+      ...player,
+      protections,
+    };
+  });
+
+  return {
+    ...state,
+    players,
+    pendingTargetAction: null,
+    lastActionText: null,
   };
 }
 
@@ -1193,6 +1495,176 @@ function confirmOlorosoAction(state: GameState) {
     ...state,
     players: nextPlayers,
     selectedCardId: null,
+    pendingTargetAction: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+function beginEatAction(state: GameState): GameState {
+  const target = getEatTarget(state);
+
+  if (!target) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'eat',
+      targetPlayerIndex: target.playerIndex,
+      selectedSlotIndex: null,
+    },
+  };
+}
+
+function confirmEatAction(state: GameState) {
+  const selectedCard = getSelectedCard(state);
+  const pendingAction = state.pendingTargetAction;
+
+  if (
+    !pendingAction ||
+    !selectedCard ||
+    selectedCard.type !== 'eat' ||
+    pendingAction.type !== 'eat' ||
+    pendingAction.selectedSlotIndex === null
+  ) {
+    return state;
+  }
+
+  const targetIndex = pendingAction.targetPlayerIndex;
+  const selectedSlotIndex = pendingAction.selectedSlotIndex;
+  const actorId = state.players[state.currentPlayerIndex].id;
+
+  if (!getEatValidSlotIndexes(state.players[targetIndex]).includes(selectedSlotIndex)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        hand: player.hand.filter((card) => card.id !== selectedCard.id),
+        playedCardsThisTurn: player.playedCardsThisTurn + 1,
+        notices: [...player.notices, `Your Eat removed one Planta from P${state.players[targetIndex].id}.`],
+      };
+    }
+
+    if (index !== targetIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[selectedSlotIndex] = null;
+
+    return {
+      ...player,
+      protections,
+      notices: [...player.notices, `P${actorId}'s Eat removed one of your Plantas.`],
+    };
+  });
+
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
+
+  return {
+    ...state,
+    players: nextPlayers,
+    selectedCardId: null,
+    pendingTargetAction: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
+function beginExplorarAction(state: GameState): GameState {
+  const target = getExplorarTarget(state);
+
+  if (!target) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTargetAction: {
+      type: 'explorar',
+      targetPlayerIndex: target.playerIndex,
+      selectedSlotIndex: null,
+      sourcePlayerId: state.players[state.currentPlayerIndex].id,
+      consumesSelectedCard: true,
+    },
+  };
+}
+
+function confirmExplorarAction(state: GameState) {
+  const pendingAction = state.pendingTargetAction;
+  const selectedCard = getSelectedCard(state);
+
+  if (
+    !pendingAction ||
+    pendingAction.type !== 'explorar' ||
+    pendingAction.selectedSlotIndex === null ||
+    (pendingAction.consumesSelectedCard !== false &&
+      (!selectedCard || selectedCard.type !== 'explorar'))
+  ) {
+    return state;
+  }
+
+  const targetIndex = pendingAction.targetPlayerIndex;
+  const selectedSlotIndex = pendingAction.selectedSlotIndex;
+  const actorId = pendingAction.sourcePlayerId ?? state.players[state.currentPlayerIndex].id;
+
+  if (!getExplorarValidSlotIndexes(state.players[targetIndex]).includes(selectedSlotIndex)) {
+    return state;
+  }
+
+  const players = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        hand:
+          pendingAction.consumesSelectedCard === false || !selectedCard
+            ? player.hand
+            : player.hand.filter((card) => card.id !== selectedCard.id),
+        playedCardsThisTurn:
+          pendingAction.consumesSelectedCard === false
+            ? player.playedCardsThisTurn
+            : player.playedCardsThisTurn + 1,
+        notices: [...player.notices, `Exploring moved onto P${state.players[targetIndex].id}.`],
+      };
+    }
+
+    if (index !== targetIndex) {
+      return player;
+    }
+
+    const protections = [...player.protections];
+    protections[selectedSlotIndex] = withTemporaryDuration({
+      id:
+        pendingAction.consumesSelectedCard === false
+          ? `exploring-chain-p${player.id}-${selectedSlotIndex + 1}`
+          : `${selectedCard!.id}-target-${player.id}`,
+      type: 'exploring',
+      sourcePlayerId: actorId,
+    });
+
+    return {
+      ...player,
+      protections,
+      notices: [...player.notices, `P${actorId}'s Explorar marked one of your Awawas.`],
+    };
+  });
+
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
+
+  return {
+    ...state,
+    players: nextPlayers,
+    selectedCardId:
+      pendingAction.consumesSelectedCard === false ? state.selectedCardId : null,
     pendingTargetAction: null,
     lastActionText: null,
     resultText: resolved.resultText,
@@ -1437,6 +1909,14 @@ export function playSelectedCard(state: GameState): GameState {
     return beginOlorosoAction(state);
   }
 
+  if (selectedCard.type === 'eat') {
+    return beginEatAction(state);
+  }
+
+  if (selectedCard.type === 'explorar') {
+    return beginExplorarAction(state);
+  }
+
   if (selectedCard.type === 'gritar') {
     return beginGritarAction(state);
   }
@@ -1459,12 +1939,28 @@ export function confirmTargetAction(state: GameState): GameState {
     return resolveAguilaAction(state);
   }
 
+  if (pendingAction.type === 'awawa') {
+    return confirmAwawaAction(state);
+  }
+
   if (pendingAction.type === 'solcito') {
     return confirmSolcitoAction(state);
   }
 
   if (pendingAction.type === 'oloroso') {
     return confirmOlorosoAction(state);
+  }
+
+  if (pendingAction.type === 'escalar') {
+    return confirmEscalarAction(state);
+  }
+
+  if (pendingAction.type === 'eat') {
+    return confirmEatAction(state);
+  }
+
+  if (pendingAction.type === 'explorar') {
+    return confirmExplorarAction(state);
   }
 
   if (pendingAction.type === 'gritar') {
@@ -1503,6 +1999,7 @@ export function placeCardInProtection(
     isProtectionPlacementBlocked(currentPlayer, slotIndex) ||
     currentPlayer.protections[slotIndex] ||
     (card.type === 'awawa' && !getAwawaCaptureTarget(state)) ||
+    (card.type === 'escalar' && !canUseEscalar(state)) ||
     (card.type === 'toilet' &&
       hasToiletOwnedByOtherPlayer(state.players, state.currentPlayerIndex))
   ) {
@@ -1512,19 +2009,29 @@ export function placeCardInProtection(
   const awawaCaptureTarget =
     card.type === 'awawa' ? getAwawaCaptureTarget(state) : null;
 
+  if (card.type === 'awawa' && awawaCaptureTarget) {
+    return {
+      ...state,
+      selectedCardId: cardId,
+      pendingTargetAction: {
+        type: 'awawa',
+        targetPlayerIndex: awawaCaptureTarget.playerIndex,
+        selectedSlotIndex: null,
+        sourcePlayerId: currentPlayer.id,
+        consumesSelectedCard: true,
+        protectionSlotIndex: slotIndex,
+      },
+      lastActionText: null,
+    };
+  }
+
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex) {
       const protections = [...player.protections];
       protections[slotIndex] =
-        card.type === 'awawa' && awawaCaptureTarget
-          ? {
-              id: `${card.id}-captured-p${state.players[awawaCaptureTarget.playerIndex].id}`,
-              type: 'awawa',
-              sourcePlayerId: state.players[awawaCaptureTarget.playerIndex].id,
-            }
-          : isTemporaryProtection(card)
-            ? withTemporaryDuration(card)
-            : card;
+        isTemporaryProtection(card)
+          ? withTemporaryDuration(card)
+          : card;
 
       return {
         ...player,
@@ -1532,24 +2039,6 @@ export function placeCardInProtection(
         protections,
       };
     }
-
-    if (
-      card.type === 'awawa' &&
-      awawaCaptureTarget &&
-      index === awawaCaptureTarget.playerIndex
-    ) {
-      const awawas = [...player.awawas];
-      const protections = [...player.protections];
-      awawas[awawaCaptureTarget.slotIndex] = false;
-      protections[awawaCaptureTarget.slotIndex] = null;
-
-      return {
-        ...player,
-        awawas,
-        protections,
-      };
-    }
-
     return player;
   });
 
@@ -1577,16 +2066,14 @@ export function finishTurn(state: GameState): GameState {
     state.players,
     state.currentPlayerIndex,
   );
-  const players = state.players.map((player, index) => {
+  const preparedTurn = processStartOfTurn(state.players, nextPlayerIndex);
+  const players = preparedTurn.players.map((player, index) => {
     if (index === state.currentPlayerIndex || index === nextPlayerIndex) {
-      const nextPlayer =
-        index === nextPlayerIndex ? clearTemporaryProtections(player) : player;
-
       return {
-        ...nextPlayer,
+        ...player,
         needsLossTurn:
-          index === state.currentPlayerIndex ? false : nextPlayer.needsLossTurn,
-        notices: index === state.currentPlayerIndex ? [] : nextPlayer.notices,
+          index === state.currentPlayerIndex ? false : player.needsLossTurn,
+        notices: index === state.currentPlayerIndex ? [] : player.notices,
         hasDrawnThisTurn: false,
         playedCardsThisTurn: 0,
         hasThrownCardThisTurn: false,
@@ -1602,7 +2089,7 @@ export function finishTurn(state: GameState): GameState {
     currentPlayerIndex: nextPlayerIndex,
     turnsCompleted: state.turnsCompleted + 1,
     selectedCardId: null,
-    pendingTargetAction: null,
+    pendingTargetAction: preparedTurn.pendingTargetAction,
     lastActionText: null,
   };
 }

@@ -11,9 +11,12 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'solcito', names: { es: 'Solcito' } },
   { id: 'elefante', names: { es: 'Elefante' } },
   { id: 'correr', names: { es: 'Correr' } },
+  { id: 'escalar', names: { es: 'Escalar' } },
   { id: 'awawa', names: { es: 'Awawa' } },
   { id: 'toilet', names: { es: 'Toilet' } },
   { id: 'oloroso', names: { es: 'Oloroso' } },
+  { id: 'eat', names: { es: 'Eat' } },
+  { id: 'explorar', names: { es: 'Explorar' } },
   { id: 'gritar', names: { es: 'Gritar' } },
   { id: 'rey', names: { es: 'Rey' } },
 ];
@@ -28,9 +31,12 @@ export const CARD_COPY_COUNTS: Partial<Record<CardTypeId, number>> = {
   solcito: GAME_CONFIG.copiesPerCardType,
   elefante: GAME_CONFIG.copiesPerCardType,
   correr: GAME_CONFIG.copiesPerCardType,
+  escalar: GAME_CONFIG.copiesPerCardType,
   awawa: GAME_CONFIG.copiesPerCardType,
   toilet: GAME_CONFIG.copiesPerCardType,
   oloroso: GAME_CONFIG.copiesPerCardType,
+  eat: GAME_CONFIG.copiesPerCardType,
+  explorar: GAME_CONFIG.copiesPerCardType,
   gritar: GAME_CONFIG.copiesPerCardType,
   rey: GAME_CONFIG.copiesPerCardType,
 };
@@ -76,6 +82,10 @@ export function getCardLabel(card: Card) {
     return 'Escaping';
   }
 
+  if (card.type === 'exploring') {
+    return 'Exploring';
+  }
+
   return (
     CARD_DEFINITIONS.find((definition) => definition.id === card.type)?.names.es
       ?? card.type
@@ -89,6 +99,8 @@ export function canCardProtect(card: Card) {
     card.type !== 'solcito' &&
     card.type !== 'elefante' &&
     card.type !== 'oloroso' &&
+    card.type !== 'eat' &&
+    card.type !== 'explorar' &&
     card.type !== 'gritar' &&
     card.type !== 'rey'
   );
@@ -101,6 +113,8 @@ export function canCardBePlayed(card: Card) {
     card.type === 'solcito' ||
     card.type === 'elefante' ||
     card.type === 'oloroso' ||
+    card.type === 'eat' ||
+    card.type === 'explorar' ||
     card.type === 'gritar' ||
     card.type === 'rey'
   );

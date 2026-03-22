@@ -24,7 +24,7 @@ type GameScreenProps = {
   currentHand: Card[];
   selectedCardId: string | null;
   pendingTarget: {
-    type: 'aguila' | 'solcito' | 'oloroso' | 'gritar' | 'rey';
+    type: 'aguila' | 'awawa' | 'solcito' | 'oloroso' | 'escalar' | 'eat' | 'explorar' | 'gritar' | 'rey';
     playerId: number;
     protections: Array<Card | null>;
     awawas: boolean[];
@@ -105,10 +105,18 @@ export function GameScreen({
   const targetActionLabel =
     pendingTarget?.type === 'aguila'
       ? 'Eat'
+      : pendingTarget?.type === 'awawa'
+        ? 'Take Awawa'
       : pendingTarget?.type === 'solcito'
         ? 'Send to Rest'
         : pendingTarget?.type === 'oloroso'
           ? 'Spread Smell'
+        : pendingTarget?.type === 'escalar'
+          ? 'Break Roca'
+        : pendingTarget?.type === 'eat'
+          ? 'Eat'
+        : pendingTarget?.type === 'explorar'
+          ? 'Explore'
         : pendingTarget?.type === 'gritar'
           ? 'Scare'
           : pendingTarget?.type === 'rey'
@@ -117,10 +125,18 @@ export function GameScreen({
   const targetPrompt =
     pendingTarget?.type === 'aguila'
       ? `Choose an Awawa from P${pendingTarget.playerId}`
+      : pendingTarget?.type === 'awawa'
+        ? `Choose an Awawa to take from P${pendingTarget.playerId}`
       : pendingTarget?.type === 'solcito'
         ? `Choose where to send Solcito on P${pendingTarget.playerId}`
         : pendingTarget?.type === 'oloroso'
           ? `Choose where to send Oloroso on P${pendingTarget.playerId}`
+        : pendingTarget?.type === 'escalar'
+          ? `Choose a Roca to remove from P${pendingTarget.playerId}`
+        : pendingTarget?.type === 'eat'
+          ? `Choose a Planta to eat on P${pendingTarget.playerId}`
+        : pendingTarget?.type === 'explorar'
+          ? `Choose an Awawa to explore on P${pendingTarget.playerId}`
         : pendingTarget?.type === 'gritar'
           ? `Choose an Awawa to scare on P${pendingTarget.playerId}`
           : pendingTarget?.type === 'rey'

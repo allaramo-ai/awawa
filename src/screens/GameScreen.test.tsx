@@ -312,6 +312,42 @@ describe('GameScreen', () => {
         <GameScreen
           {...baseProps}
           pendingTarget={{
+            type: 'awawa',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [1, 2, 3, 4],
+            selectedSlotIndex: 1,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Take Awawa' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'escalar',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0],
+            selectedSlotIndex: 0,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Break Roca' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
             type: 'solcito',
             playerId: 2,
             protections: baseProps.playerBoards[1].protections,
@@ -342,6 +378,42 @@ describe('GameScreen', () => {
     });
 
     expect(tree.root.findByProps({ label: 'Spread Smell' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'eat',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0],
+            selectedSlotIndex: 0,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Eat' })).toBeDefined();
+
+    act(() => {
+      tree.update(
+        <GameScreen
+          {...baseProps}
+          pendingTarget={{
+            type: 'explorar',
+            playerId: 2,
+            protections: baseProps.playerBoards[1].protections,
+            awawas: baseProps.playerBoards[1].awawas,
+            validSlotIndexes: [0, 1, 2, 3, 4],
+            selectedSlotIndex: 1,
+          }}
+        />,
+      );
+    });
+
+    expect(tree.root.findByProps({ label: 'Explore' })).toBeDefined();
 
     act(() => {
       tree.update(

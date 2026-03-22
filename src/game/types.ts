@@ -10,10 +10,14 @@ export type CardTypeId =
   | 'solcito'
   | 'elefante'
   | 'correr'
+  | 'escalar'
   | 'awawa'
   | 'toilet'
   | 'oloroso'
   | 'escaping'
+  | 'exploring'
+  | 'eat'
+  | 'explorar'
   | 'gritar'
   | 'rey';
 
@@ -45,8 +49,12 @@ export type GameStatus = 'playing' | 'game_over';
 
 export type PendingTargetActionType =
   | 'aguila'
+  | 'awawa'
   | 'solcito'
   | 'oloroso'
+  | 'escalar'
+  | 'eat'
+  | 'explorar'
   | 'gritar'
   | 'rey';
 
@@ -54,6 +62,9 @@ export type PendingTargetAction = {
   type: PendingTargetActionType;
   targetPlayerIndex: number;
   selectedSlotIndex: number | null;
+  sourcePlayerId?: number;
+  consumesSelectedCard?: boolean;
+  protectionSlotIndex?: number;
 };
 
 export type GameState = {
