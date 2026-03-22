@@ -49,6 +49,24 @@ function withTemporaryDuration(card: Card) {
   };
 }
 
+function getNearestAliveAwawaIndex(
+  player: PlayerState,
+  fromIndex: number,
+  direction: -1 | 1,
+) {
+  for (
+    let slotIndex = fromIndex + direction;
+    slotIndex >= 0 && slotIndex < player.awawas.length;
+    slotIndex += direction
+  ) {
+    if (player.awawas[slotIndex]) {
+      return slotIndex;
+    }
+  }
+
+  return null;
+}
+
 function syncEscapingMarkers(player: PlayerState): PlayerState {
   const protections = player.protections.map((protection) =>
     protection?.type === 'escaping' ? null : protection,
@@ -59,12 +77,12 @@ function syncEscapingMarkers(player: PlayerState): PlayerState {
       return;
     }
 
-    const adjacentIndexes = [index - 1, index + 1].filter(
-      (slotIndex) =>
-        slotIndex >= 0 &&
-        slotIndex < protections.length &&
-        player.awawas[slotIndex] &&
-        protections[slotIndex]?.type !== 'oloroso',
+    const adjacentIndexes = [
+      getNearestAliveAwawaIndex(player, index, -1),
+      getNearestAliveAwawaIndex(player, index, 1),
+    ].filter(
+      (slotIndex): slotIndex is number =>
+        slotIndex !== null && protections[slotIndex]?.type !== 'oloroso',
     );
 
     adjacentIndexes.forEach((slotIndex) => {
@@ -82,10 +100,14 @@ function syncEscapingMarkers(player: PlayerState): PlayerState {
 }
 
 function isProtectionPlacementBlocked(player: PlayerState, slotIndex: number) {
+  const leftAliveIndex = getNearestAliveAwawaIndex(player, slotIndex, -1);
+  const rightAliveIndex = getNearestAliveAwawaIndex(player, slotIndex, 1);
+
   return (
-    (slotIndex > 0 && player.protections[slotIndex - 1]?.type === 'oloroso') ||
-    (slotIndex < player.protections.length - 1 &&
-      player.protections[slotIndex + 1]?.type === 'oloroso')
+    (leftAliveIndex !== null &&
+      player.protections[leftAliveIndex]?.type === 'oloroso') ||
+    (rightAliveIndex !== null &&
+      player.protections[rightAliveIndex]?.type === 'oloroso')
   );
 }
 

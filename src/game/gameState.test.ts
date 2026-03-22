@@ -445,6 +445,22 @@ describe('gameState', () => {
     expect(afterPlacement.players[1].protections[1]?.type).toBe('roca');
   });
 
+  it('oloroso marks escaping on the nearest alive awawa on each side when there is a gap', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'oloroso-x', type: 'oloroso' }];
+    state.players[1].awawas = [true, true, false, true, true];
+
+    const afterPlay = confirmTargetAction(
+      selectTargetSlot(playSelectedCard(selectCard(state, 'oloroso-x')), 3),
+    );
+
+    expect(afterPlay.players[1].protections[3]?.type).toBe('oloroso');
+    expect(afterPlay.players[1].protections[4]?.type).toBe('escaping');
+    expect(afterPlay.players[1].protections[1]?.type).toBe('escaping');
+    expect(afterPlay.players[1].protections[2]).toBeNull();
+  });
+
   it('aguila prioritizes escaping before ordinary unprotected awawas', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
