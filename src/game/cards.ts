@@ -11,6 +11,7 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'solcito', names: { es: 'Solcito' } },
   { id: 'elefante', names: { es: 'Elefante' } },
   { id: 'correr', names: { es: 'Correr' } },
+  { id: 'toilet', names: { es: 'Toilet' } },
   { id: 'gritar', names: { es: 'Gritar' } },
   { id: 'rey', names: { es: 'Rey' } },
 ];

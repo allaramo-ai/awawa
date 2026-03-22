@@ -29,6 +29,22 @@ function getEmptyProtectionSlotIndex(player: PlayerState) {
   );
 }
 
+function isTemporaryProtection(card: Card | null) {
+  return (
+    card?.type === 'solcito' ||
+    card?.type === 'correr' ||
+    card?.type === 'elefante' ||
+    card?.type === 'toilet'
+  );
+}
+
+function withTemporaryDuration(card: Card) {
+  return {
+    ...card,
+    remainingTurnStarts: GAME_CONFIG.temporaryProtectionTurnStarts,
+  };
+}
+
 function getActivePlayerIndexes(players: PlayerState[]) {
   return players
     .map((player, index) => ({ player, index }))
@@ -169,6 +185,17 @@ function getLeftPlayerIndexes(players: PlayerState[], currentIndex: number) {
   return indexes;
 }
 
+function hasToiletOwnedByOtherPlayer(
+  players: PlayerState[],
+  currentPlayerIndex: number,
+) {
+  return players.some(
+    (player, index) =>
+      index !== currentPlayerIndex &&
+      player.protections.some((protection) => protection?.type === 'toilet'),
+  );
+}
+
 function clearAliveProtections(player: PlayerState) {
   return player.protections.map((protection, index) =>
     player.awawas[index] ? null : protection,
@@ -301,15 +328,27 @@ function canPlayRey(state: GameState, player: PlayerState) {
 }
 
 function clearTemporaryProtections(player: PlayerState) {
+  const protections: Array<Card | null> = player.protections.map((protection) => {
+    if (!protection || !isTemporaryProtection(protection)) {
+      return protection;
+    }
+
+    const remainingTurnStarts = protection.remainingTurnStarts
+      ?? GAME_CONFIG.temporaryProtectionTurnStarts;
+
+    if (remainingTurnStarts <= 1) {
+      return null;
+    }
+
+    return {
+      ...protection,
+      remainingTurnStarts: remainingTurnStarts - 1,
+    };
+  });
+
   return {
     ...player,
-    protections: player.protections.map((protection) =>
-      protection?.type === 'elefante' ||
-      protection?.type === 'correr' ||
-      protection?.type === 'solcito'
-        ? null
-        : protection,
-    ),
+    protections,
   };
 }
 
@@ -809,6 +848,7 @@ function confirmSolcitoAction(state: GameState) {
       id: `${selectedCard.id}-target-${player.id}`,
       type: 'solcito',
       sourcePlayerId: actorId,
+      remainingTurnStarts: GAME_CONFIG.temporaryProtectionTurnStarts,
     };
 
     return {
@@ -853,10 +893,10 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
 
     const protections = player.protections.map((protection, slotIndex) =>
       player.awawas[slotIndex]
-        ? {
+        ? withTemporaryDuration({
             id: `${selectedCard.id}-slot-${slotIndex + 1}`,
             type: 'elefante' as const,
-          }
+          })
         : protection,
     );
 
@@ -1133,7 +1173,9 @@ export function placeCardInProtection(
     slotIndex < 0 ||
     slotIndex >= currentPlayer.protections.length ||
     !currentPlayer.awawas[slotIndex] ||
-    currentPlayer.protections[slotIndex]
+    currentPlayer.protections[slotIndex] ||
+    (card.type === 'toilet' &&
+      hasToiletOwnedByOtherPlayer(state.players, state.currentPlayerIndex))
   ) {
     return state;
   }
@@ -1144,7 +1186,9 @@ export function placeCardInProtection(
     }
 
     const protections = [...player.protections];
-    protections[slotIndex] = card;
+    protections[slotIndex] = isTemporaryProtection(card)
+      ? withTemporaryDuration(card)
+      : card;
 
     return {
       ...player,

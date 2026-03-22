@@ -10,6 +10,7 @@ export type CardTypeId =
   | 'solcito'
   | 'elefante'
   | 'correr'
+  | 'toilet'
   | 'gritar'
   | 'rey';
 
@@ -22,6 +23,7 @@ export type Card = {
   id: string;
   type: CardTypeId;
   sourcePlayerId?: number;
+  remainingTurnStarts?: number;
 };
 
 export type PlayerState = {

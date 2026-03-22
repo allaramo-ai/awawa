@@ -269,7 +269,7 @@ describe('gameState', () => {
     );
   });
 
-  it('solcito disappears when the targeted player next turn starts', () => {
+  it('solcito lasts for two starts of the targeted player turn and then disappears', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
     state.players[0].hand = [{ id: 'solcito-x', type: 'solcito' }];
@@ -277,10 +277,13 @@ describe('gameState', () => {
     const afterPlay = confirmTargetAction(
       selectTargetSlot(playSelectedCard(selectCard(state, 'solcito-x')), 0),
     );
-    const playerTwoTurn = finishTurn(afterPlay);
+    const playerTwoFirstTurn = finishTurn(afterPlay);
+    const playerOneTurnAgain = finishTurn(playerTwoFirstTurn);
+    const playerTwoSecondTurn = finishTurn(playerOneTurnAgain);
 
     expect(afterPlay.players[1].protections[0]?.type).toBe('solcito');
-    expect(playerTwoTurn.players[1].protections[0]).toBeNull();
+    expect(playerTwoFirstTurn.players[1].protections[0]?.type).toBe('solcito');
+    expect(playerTwoSecondTurn.players[1].protections[0]).toBeNull();
   });
 
   it('elefante replaces every alive protection slot and removes existing protections and solcitos', () => {
@@ -301,16 +304,19 @@ describe('gameState', () => {
     expect(afterPlay.players[0].hasPlayedCardThisTurn).toBe(true);
   });
 
-  it('correr protects an awawa for one round and disappears on that player next turn', () => {
+  it('correr lasts for two starts of that player turn and then disappears', () => {
     const state = createGameState(2);
     state.players[0].hand = [{ id: 'correr-x', type: 'correr' }];
 
     const afterPlacement = placeCardInProtection(state, 'correr-x', 0);
     const playerTwoTurn = finishTurn(afterPlacement);
-    const playerOneTurnAgain = finishTurn(playerTwoTurn);
+    const playerOneFirstReturn = finishTurn(playerTwoTurn);
+    const playerTwoTurnAgain = finishTurn(playerOneFirstReturn);
+    const playerOneSecondReturn = finishTurn(playerTwoTurnAgain);
 
     expect(afterPlacement.players[0].protections[0]?.type).toBe('correr');
-    expect(playerOneTurnAgain.players[0].protections[0]).toBeNull();
+    expect(playerOneFirstReturn.players[0].protections[0]?.type).toBe('correr');
+    expect(playerOneSecondReturn.players[0].protections[0]).toBeNull();
   });
 
   it('gritar can be played only if a left-side player has a removable protection', () => {
@@ -593,16 +599,64 @@ describe('gameState', () => {
     expect(dismissedState.players[1].notices).toHaveLength(0);
   });
 
-  it('removes elefante protections when that player turn starts again', () => {
+  it('removes elefante protections after that player has started two more turns', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
     state.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
 
     const afterPlay = playSelectedCard(selectCard(state, 'elefante-x'));
     const playerTwoTurn = finishTurn(afterPlay);
-    const playerOneTurnAgain = finishTurn(playerTwoTurn);
+    const playerOneFirstReturn = finishTurn(playerTwoTurn);
+    const playerTwoTurnAgain = finishTurn(playerOneFirstReturn);
+    const playerOneSecondReturn = finishTurn(playerTwoTurnAgain);
 
     expect(afterPlay.players[0].protections.every((card) => card?.type === 'elefante')).toBe(true);
-    expect(playerOneTurnAgain.players[0].protections.every((card) => card === null)).toBe(true);
+    expect(playerOneFirstReturn.players[0].protections.every((card) => card?.type === 'elefante')).toBe(true);
+    expect(playerOneSecondReturn.players[0].protections.every((card) => card === null)).toBe(true);
+  });
+
+  it('lets the same player place multiple toilet protections but blocks other players while any toilet is active', () => {
+    const state = createGameState(2);
+    state.players[0].hand = [
+      { id: 'toilet-p1-a', type: 'toilet' },
+      { id: 'toilet-p1-b', type: 'toilet' },
+    ];
+
+    const afterFirstToilet = placeCardInProtection(state, 'toilet-p1-a', 0);
+    const afterSecondToilet = placeCardInProtection(afterFirstToilet, 'toilet-p1-b', 1);
+
+    afterSecondToilet.players[1].hand = [{ id: 'toilet-p2-a', type: 'toilet' }];
+
+    const blockedForPlayerTwo = placeCardInProtection(
+      finishTurn(afterSecondToilet),
+      'toilet-p2-a',
+      0,
+    );
+
+    expect(afterSecondToilet.players[0].protections[0]?.type).toBe('toilet');
+    expect(afterSecondToilet.players[0].protections[1]?.type).toBe('toilet');
+    expect(blockedForPlayerTwo.players[1].protections[0]).toBeNull();
+  });
+
+  it('allows another player to place toilet after the original toilet expires two turns later', () => {
+    const state = createGameState(2);
+    state.players[0].hand = [{ id: 'toilet-p1', type: 'toilet' }];
+    state.players[1].hand = [{ id: 'toilet-p2', type: 'toilet' }];
+
+    const afterPlayerOneToilet = placeCardInProtection(state, 'toilet-p1', 0);
+    const playerTwoTurn = finishTurn(afterPlayerOneToilet);
+    const playerOneFirstReturn = finishTurn(playerTwoTurn);
+    const playerTwoTurnAgain = finishTurn(playerOneFirstReturn);
+    const playerOneSecondReturn = finishTurn(playerTwoTurnAgain);
+    const playerTwoAfterExpiry = finishTurn(playerOneSecondReturn);
+    const playerTwoPlacement = placeCardInProtection(
+      playerTwoAfterExpiry,
+      'toilet-p2',
+      0,
+    );
+
+    expect(playerOneFirstReturn.players[0].protections[0]?.type).toBe('toilet');
+    expect(playerOneSecondReturn.players[0].protections[0]).toBeNull();
+    expect(playerTwoPlacement.players[1].protections[0]?.type).toBe('toilet');
   });
 });
