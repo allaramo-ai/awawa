@@ -123,6 +123,7 @@ export default function App() {
 
   const currentPlayer = getCurrentPlayer(gameState);
   const gameOver = gameState.status === 'game_over';
+  const playerLost = currentPlayer.awawas.every((alive) => !alive);
   const notificationMessages = currentPlayer.notices;
   const pendingTarget = getPendingTarget(gameState);
 
@@ -142,6 +143,7 @@ export default function App() {
         currentHand={currentPlayer.hand}
         selectedCardId={gameState.selectedCardId}
         pendingTarget={pendingTarget}
+        playerLost={playerLost}
         canDraw={canDrawCard(gameState)}
         canThrow={canThrowSelectedCard(gameState)}
         canPlay={canPlaySelectedCard(gameState)}

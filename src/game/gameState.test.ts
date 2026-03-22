@@ -136,6 +136,28 @@ describe('gameState', () => {
     expect(getCurrentPlayer(nextState).id).toBe(3);
   });
 
+  it('gives an eliminated player a lost turn before skipping them from rotation', () => {
+    const state = createGameState(3);
+    state.turnsCompleted = 3;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+    state.players[1].awawas = [true, false, false, false, false];
+
+    const afterAttack = confirmAguilaAction(
+      selectAguilaTargetSlot(playSelectedCard(selectCard(state, 'aguila-x')), 0),
+    );
+    const lostTurnState = finishTurn(afterAttack);
+
+    expect(getCurrentPlayer(lostTurnState).id).toBe(2);
+    expect(getCurrentPlayer(lostTurnState).awawas.every((alive) => !alive)).toBe(true);
+    expect(canDrawCard(lostTurnState)).toBe(false);
+    expect(canThrowSelectedCard(lostTurnState)).toBe(false);
+    expect(canPlaySelectedCard(lostTurnState)).toBe(false);
+
+    const afterLostTurn = finishTurn(lostTurnState);
+
+    expect(getCurrentPlayer(afterLostTurn).id).toBe(3);
+  });
+
   it('places non-playable cards into protection slots and preserves them across turns', () => {
     const state = createGameState(2);
     state.players[0].hand = [{ id: 'roca-x', type: 'roca' }];

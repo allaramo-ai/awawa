@@ -31,6 +31,7 @@ type GameScreenProps = {
     validSlotIndexes: number[];
     selectedSlotIndex: number | null;
   } | null;
+  playerLost: boolean;
   canDraw: boolean;
   canThrow: boolean;
   canPlay: boolean;
@@ -59,6 +60,7 @@ export function GameScreen({
   currentHand,
   selectedCardId,
   pendingTarget,
+  playerLost,
   canDraw,
   canThrow,
   canPlay,
@@ -86,7 +88,9 @@ export function GameScreen({
   );
   const [dropZones, setDropZones] = useState<DropZone[]>([]);
   const [peekPlayerId, setPeekPlayerId] = useState<number | null>(null);
-  const defaultMessage = 'Protect your Awawas or play a card.';
+  const defaultMessage = playerLost
+    ? 'You lost.'
+    : 'Protect your Awawas or play a card.';
   const activeNotification = notificationMessages[0] ?? defaultMessage;
   const hasDismissibleNotification = notificationMessages.length > 0;
   const isChoosingTarget = pendingTarget !== null;
@@ -208,13 +212,13 @@ export function GameScreen({
             <PrimaryButton
               label="Draw"
               onPress={onDrawCard}
-              disabled={gameOver || !canDraw}
+              disabled={gameOver || playerLost || !canDraw}
               size="compact"
             />
             <PrimaryButton
               label="Throw Card"
               onPress={onThrowCard}
-              disabled={gameOver || !canThrow}
+              disabled={gameOver || playerLost || !canThrow}
               size="compact"
               variant="outline"
             />
@@ -234,7 +238,7 @@ export function GameScreen({
             </View>
           ) : (
             <View style={styles.playArea}>
-              {!isPeeking && !isChoosingTarget ? (
+              {!isPeeking && !isChoosingTarget && !playerLost ? (
                 <View style={styles.handArea} testID="current-player-hand">
                   <PlayerHand
                     cards={currentHand}
@@ -291,11 +295,12 @@ export function GameScreen({
         <View style={styles.bottomContent}>
           <View style={styles.buttonRow}>
             <View style={styles.buttonWrap}>
-              <PrimaryButton
-                label={isChoosingTarget ? targetActionLabel ?? 'Play Card' : 'Play Card'}
-                onPress={isChoosingTarget ? onConfirmTarget : onPlayCard}
-                disabled={
+            <PrimaryButton
+              label={isChoosingTarget ? targetActionLabel ?? 'Play Card' : 'Play Card'}
+              onPress={isChoosingTarget ? onConfirmTarget : onPlayCard}
+              disabled={
                   gameOver ||
+                  playerLost ||
                   (isChoosingTarget
                     ? pendingTarget?.selectedSlotIndex === null
                     : !canPlay)

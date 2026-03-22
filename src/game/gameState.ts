@@ -9,6 +9,7 @@ function createPlayers(playerCount: number): PlayerState[] {
     protections: Array.from({ length: GAME_CONFIG.awawaSlots }, () => null),
     awawas: Array.from({ length: GAME_CONFIG.awawaSlots }, () => true),
     notices: [],
+    needsLossTurn: false,
     hasDrawnThisTurn: false,
     playedCardsThisTurn: 0,
     hasThrownCardThisTurn: false,
@@ -118,6 +119,32 @@ function getActivePlayerIndexes(players: PlayerState[]) {
     .map(({ index }) => index);
 }
 
+function getTurnPlayerIndexes(players: PlayerState[]) {
+  return players
+    .map((player, index) => ({ player, index }))
+    .filter(
+      ({ player }) =>
+        getAliveAwawaCount(player) > 0 || player.needsLossTurn,
+    )
+    .map(({ index }) => index);
+}
+
+function withLossTurnFlags(
+  previousPlayers: PlayerState[],
+  nextPlayers: PlayerState[],
+) {
+  return nextPlayers.map((player, index) => {
+    const previouslyAlive = getAliveAwawaCount(previousPlayers[index]) > 0;
+    const aliveNow = getAliveAwawaCount(player) > 0;
+
+    return {
+      ...player,
+      needsLossTurn:
+        player.needsLossTurn || (previouslyAlive && !aliveNow),
+    };
+  });
+}
+
 function buildDeckWinnerText(players: PlayerState[]) {
   const counts = players.map((player) => ({
     id: player.id,
@@ -162,7 +189,7 @@ function getResolvedGameStatus(drawPile: Card[], players: PlayerState[]) {
 }
 
 function getNextActivePlayerIndex(players: PlayerState[], currentIndex: number) {
-  const activeIndexes = getActivePlayerIndexes(players);
+  const activeIndexes = getTurnPlayerIndexes(players);
 
   if (activeIndexes.length === 0) {
     return currentIndex;
@@ -616,6 +643,7 @@ export function canThrowSelectedCard(state: GameState) {
   return (
     state.status === 'playing' &&
     !state.pendingTargetAction &&
+    getAliveAwawaCount(currentPlayer) > 0 &&
     !!selectedCard &&
     currentPlayer.hand.length > 0 &&
     !currentPlayer.hasThrownCardThisTurn
@@ -689,6 +717,7 @@ export function canPlaySelectedCard(state: GameState) {
     state.status !== 'playing' ||
     state.pendingTargetAction !== null ||
     !selectedCard ||
+    getAliveAwawaCount(currentPlayer) <= 0 ||
     !canCardBePlayed(selectedCard)
   ) {
     return false;
@@ -882,11 +911,12 @@ function resolveAguilaAction(state: GameState) {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players: players.map((player, index) =>
+    players: nextPlayers.map((player, index) =>
       index === state.currentPlayerIndex
         ? {
             ...player,
@@ -959,11 +989,12 @@ function playBebe(state: GameState, selectedCard: Card): GameState {
   });
 
   const colonyCount = state.colonyCount - 1;
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     colonyCount,
     selectedCardId: null,
     pendingTargetAction: null,
@@ -1043,15 +1074,16 @@ function confirmSolcitoAction(state: GameState) {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
   const actorMessage =
     resolved.status === 'game_over'
       ? null
-      : `Your Solcito landed on P${players[target.targetPlayerIndex].id}.`;
+      : `Your Solcito landed on P${nextPlayers[target.targetPlayerIndex].id}.`;
 
   return {
     ...state,
-    players: players.map((player, index) =>
+    players: nextPlayers.map((player, index) =>
       index === state.currentPlayerIndex && actorMessage
         ? {
             ...player,
@@ -1154,11 +1186,12 @@ function confirmOlorosoAction(state: GameState) {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     selectedCardId: null,
     pendingTargetAction: null,
     lastActionText: null,
@@ -1191,11 +1224,12 @@ function playElefante(state: GameState, selectedCard: Card): GameState {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     selectedCardId: null,
     pendingTargetAction: null,
     lastActionText: null,
@@ -1267,11 +1301,12 @@ function confirmGritarAction(state: GameState) {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     selectedCardId: null,
     pendingTargetAction: null,
     lastActionText: null,
@@ -1357,11 +1392,12 @@ function confirmReyAction(state: GameState) {
     };
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     selectedCardId: null,
     pendingTargetAction: null,
     lastActionText: null,
@@ -1517,11 +1553,12 @@ export function placeCardInProtection(
     return player;
   });
 
-  const resolved = getResolvedGameStatus(state.drawPile, players);
+  const nextPlayers = withLossTurnFlags(state.players, players);
+  const resolved = getResolvedGameStatus(state.drawPile, nextPlayers);
 
   return {
     ...state,
-    players,
+    players: nextPlayers,
     selectedCardId:
       state.selectedCardId === cardId ? null : state.selectedCardId,
     pendingTargetAction: null,
@@ -1547,6 +1584,8 @@ export function finishTurn(state: GameState): GameState {
 
       return {
         ...nextPlayer,
+        needsLossTurn:
+          index === state.currentPlayerIndex ? false : nextPlayer.needsLossTurn,
         notices: index === state.currentPlayerIndex ? [] : nextPlayer.notices,
         hasDrawnThisTurn: false,
         playedCardsThisTurn: 0,

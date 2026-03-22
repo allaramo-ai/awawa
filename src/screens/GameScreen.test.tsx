@@ -71,6 +71,7 @@ const baseProps = {
   currentHand: [{ id: 'aguila-1', type: 'aguila' as const }],
   selectedCardId: null,
   pendingTarget: null,
+  playerLost: false,
   canDraw: true,
   canThrow: false,
   canPlay: true,
@@ -222,6 +223,33 @@ describe('GameScreen', () => {
     const enabledThrowButton = tree.root.findByProps({ label: 'Throw Card' });
 
     expect(enabledThrowButton.props.disabled).toBe(false);
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('shows a lost message and only keeps finish turn enabled on a lost turn', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <GameScreen
+          {...baseProps}
+          playerLost={true}
+          canDraw={false}
+          canThrow={false}
+          canPlay={false}
+        />,
+      );
+    });
+
+    expect(findHostNodesByTestId(tree, 'current-player-hand')).toHaveLength(0);
+    expect(findHostNodesByTestId(tree, 'notification-box')).toHaveLength(1);
+    expect(tree.root.findByProps({ label: 'Draw' }).props.disabled).toBe(true);
+    expect(tree.root.findByProps({ label: 'Throw Card' }).props.disabled).toBe(true);
+    expect(tree.root.findByProps({ label: 'Play Card' }).props.disabled).toBe(true);
+    expect(tree.root.findByProps({ label: 'Finish Turn' }).props.disabled).toBe(false);
 
     act(() => {
       tree.unmount();

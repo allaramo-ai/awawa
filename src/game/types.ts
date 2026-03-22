@@ -35,6 +35,7 @@ export type PlayerState = {
   protections: Array<Card | null>;
   awawas: boolean[];
   notices: string[];
+  needsLossTurn: boolean;
   hasDrawnThisTurn: boolean;
   playedCardsThisTurn: number;
   hasThrownCardThisTurn: boolean;
