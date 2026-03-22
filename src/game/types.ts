@@ -7,7 +7,8 @@ export type CardTypeId =
   | 'arbusto'
   | 'aguila'
   | 'bebe'
-  | 'solcito';
+  | 'solcito'
+  | 'elefante';
 
 export type CardDefinition = {
   id: CardTypeId;

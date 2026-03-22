@@ -148,6 +148,22 @@ function canPlaySolcito(state: GameState, player: PlayerState) {
   return !player.hasPlayedCardThisTurn && !!getNextSolcitoTarget(state);
 }
 
+function canPlayElefante(state: GameState, player: PlayerState) {
+  return (
+    !player.hasPlayedCardThisTurn &&
+    player.awawas.some((alive) => alive)
+  );
+}
+
+function clearElefanteProtections(player: PlayerState) {
+  return {
+    ...player,
+    protections: player.protections.map((protection) =>
+      protection?.type === 'elefante' ? null : protection,
+    ),
+  };
+}
+
 export function createGameState(playerCount: number): GameState {
   const drawPile = [...buildConfiguredDeck()];
   const players = createPlayers(playerCount);
@@ -292,6 +308,10 @@ export function canPlaySelectedCard(state: GameState) {
 
   if (selectedCard.type === 'solcito') {
     return canPlaySolcito(state, currentPlayer);
+  }
+
+  if (selectedCard.type === 'elefante') {
+    return canPlayElefante(state, currentPlayer);
   }
 
   return false;
@@ -503,6 +523,41 @@ function playSolcito(state: GameState, selectedCard: Card): GameState {
   };
 }
 
+function playElefante(state: GameState, selectedCard: Card): GameState {
+  const players = state.players.map((player, index) => {
+    if (index !== state.currentPlayerIndex) {
+      return player;
+    }
+
+    const protections = player.protections.map((protection, slotIndex) =>
+      player.awawas[slotIndex]
+        ? {
+            id: `${selectedCard.id}-slot-${slotIndex + 1}`,
+            type: 'elefante' as const,
+          }
+        : protection,
+    );
+
+    return {
+      ...player,
+      hand: player.hand.filter((card) => card.id !== selectedCard.id),
+      protections,
+      hasPlayedCardThisTurn: true,
+    };
+  });
+
+  const resolved = getResolvedGameStatus(state.drawPile, players);
+
+  return {
+    ...state,
+    players,
+    selectedCardId: null,
+    lastActionText: null,
+    resultText: resolved.resultText,
+    status: resolved.status,
+  };
+}
+
 export function playSelectedCard(state: GameState): GameState {
   const selectedCard = getSelectedCard(state);
 
@@ -524,6 +579,10 @@ export function playSelectedCard(state: GameState): GameState {
 
   if (selectedCard.type === 'solcito') {
     return playSolcito(state, selectedCard);
+  }
+
+  if (selectedCard.type === 'elefante') {
+    return playElefante(state, selectedCard);
   }
 
   return state;
@@ -584,9 +643,12 @@ export function finishTurn(state: GameState): GameState {
   );
   const players = state.players.map((player, index) => {
     if (index === state.currentPlayerIndex || index === nextPlayerIndex) {
+      const nextPlayer =
+        index === nextPlayerIndex ? clearElefanteProtections(player) : player;
+
       return {
-        ...player,
-        notices: index === state.currentPlayerIndex ? [] : player.notices,
+        ...nextPlayer,
+        notices: index === state.currentPlayerIndex ? [] : nextPlayer.notices,
         hasDrawnThisTurn: false,
         hasPlayedCardThisTurn: false,
       };

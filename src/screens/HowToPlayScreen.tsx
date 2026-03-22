@@ -16,6 +16,7 @@ const rules = [
   'Aguila attacks only the player to your right. It prefers an Awawa marked by Solcito. If it kills an unprotected Awawa, the rest of that player protections are removed.',
   'Bebe restores one missing Awawa if you have space and Colonia still has stock.',
   'Solcito lands on the next player board with an empty protection slot and marks that Awawa as a priority target.',
+  'Elefante covers all of your alive protection slots, replaces any card already there, and blocks Aguila until your next turn starts.',
   'A player with no Awawas left is out. The game ends when one player remains or the deck is exhausted.',
 ];
 

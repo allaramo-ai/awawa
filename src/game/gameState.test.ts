@@ -107,9 +107,13 @@ describe('gameState', () => {
     const solcitoState = createGameState(1);
     solcitoState.players[0].hand = [{ id: 'solcito-x', type: 'solcito' }];
 
+    const elefanteState = createGameState(1);
+    elefanteState.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
+
     expect(placeCardInProtection(aguilaState, 'aguila-x', 0)).toBe(aguilaState);
     expect(placeCardInProtection(bebeState, 'bebe-x', 0)).toBe(bebeState);
     expect(placeCardInProtection(solcitoState, 'solcito-x', 0)).toBe(solcitoState);
+    expect(placeCardInProtection(elefanteState, 'elefante-x', 0)).toBe(elefanteState);
   });
 
   it('does not allow aguila to be played in the first round', () => {
@@ -223,6 +227,24 @@ describe('gameState', () => {
     );
   });
 
+  it('elefante replaces every alive protection slot and removes existing protections and solcitos', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
+    state.players[0].protections = [
+      { id: 'roca-p1', type: 'roca' },
+      { id: 'solcito-p1', type: 'solcito', sourcePlayerId: 2 },
+      null,
+      { id: 'arbusto-p1', type: 'arbusto' },
+      null,
+    ];
+
+    const afterPlay = playSelectedCard(selectCard(state, 'elefante-x'));
+
+    expect(afterPlay.players[0].protections.every((card) => card?.type === 'elefante')).toBe(true);
+    expect(afterPlay.players[0].hasPlayedCardThisTurn).toBe(true);
+  });
+
   it('aguila prioritizes killing the awawa marked by solcito and keeps other protections', () => {
     const state = createGameState(2);
     state.turnsCompleted = 2;
@@ -238,6 +260,24 @@ describe('gameState', () => {
 
     expect(afterPlay.players[1].awawas[2]).toBe(false);
     expect(afterPlay.players[1].protections[0]?.type).toBe('roca');
+  });
+
+  it('aguila cannot kill through elefante protection', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+    state.players[1].protections = state.players[1].protections.map((_, index) => ({
+      id: `elefante-p2-${index}`,
+      type: 'elefante',
+    }));
+
+    const afterPlay = playSelectedCard(selectCard(state, 'aguila-x'));
+
+    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(5);
+    expect(afterPlay.players[1].protections.every((card) => card?.type === 'elefante')).toBe(true);
+    expect(afterPlay.players[0].notices.join(' ')).toContain(
+      'could not reach an unprotected Awawa from P2.',
+    );
   });
 
   it('aguila kills only the right-side player and removes other protections after an unprotected kill', () => {
@@ -342,5 +382,18 @@ describe('gameState', () => {
 
     expect(attackedState.players[1].notices).toHaveLength(1);
     expect(dismissedState.players[1].notices).toHaveLength(0);
+  });
+
+  it('removes elefante protections when that player turn starts again', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'elefante-x', type: 'elefante' }];
+
+    const afterPlay = playSelectedCard(selectCard(state, 'elefante-x'));
+    const playerTwoTurn = finishTurn(afterPlay);
+    const playerOneTurnAgain = finishTurn(playerTwoTurn);
+
+    expect(afterPlay.players[0].protections.every((card) => card?.type === 'elefante')).toBe(true);
+    expect(playerOneTurnAgain.players[0].protections.every((card) => card === null)).toBe(true);
   });
 });
