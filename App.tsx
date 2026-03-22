@@ -15,12 +15,15 @@ import {
 } from './src/game/gameState';
 import { GameState } from './src/game/types';
 import { GameScreen } from './src/screens/GameScreen';
+import { HowToPlayScreen } from './src/screens/HowToPlayScreen';
 import { SetupScreen } from './src/screens/SetupScreen';
 
 export default function App() {
+  const [setupScreen, setSetupScreen] = useState<'setup' | 'rules'>('setup');
   const [gameState, setGameState] = useState<GameState | null>(null);
 
   const startGame = (nextPlayerCount: number) => {
+    setSetupScreen('setup');
     setGameState(createGameState(nextPlayerCount));
   };
 
@@ -37,6 +40,7 @@ export default function App() {
   };
 
   const restartGame = () => {
+    setSetupScreen('setup');
     setGameState(null);
   };
 
@@ -67,10 +71,22 @@ export default function App() {
   };
 
   if (!gameState) {
+    if (setupScreen === 'rules') {
+      return (
+        <>
+          <StatusBar style="light" />
+          <HowToPlayScreen onBack={() => setSetupScreen('setup')} />
+        </>
+      );
+    }
+
     return (
       <>
         <StatusBar style="light" />
-        <SetupScreen onStartGame={startGame} />
+        <SetupScreen
+          onStartGame={startGame}
+          onShowHowToPlay={() => setSetupScreen('rules')}
+        />
       </>
     );
   }

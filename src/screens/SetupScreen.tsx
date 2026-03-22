@@ -9,9 +9,13 @@ import { spacing } from '../theme/spacing';
 
 type SetupScreenProps = {
   onStartGame: (playerCount: number) => void;
+  onShowHowToPlay: () => void;
 };
 
-export function SetupScreen({ onStartGame }: SetupScreenProps) {
+export function SetupScreen({
+  onStartGame,
+  onShowHowToPlay,
+}: SetupScreenProps) {
   const [playerCount, setPlayerCount] = useState<number>(
     PLAYER_COUNT.defaultValue,
   );
@@ -36,6 +40,11 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
         <PrimaryButton
           label="Start Game"
           onPress={() => onStartGame(playerCount)}
+        />
+        <PrimaryButton
+          label="How To Play"
+          onPress={onShowHowToPlay}
+          variant="outline"
         />
       </View>
     </SafeAreaView>
