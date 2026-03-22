@@ -49,6 +49,38 @@ function withTemporaryDuration(card: Card) {
   };
 }
 
+function syncEscapingMarkers(player: PlayerState): PlayerState {
+  const protections = player.protections.map((protection) =>
+    protection?.type === 'escaping' ? null : protection,
+  );
+
+  protections.forEach((protection, index) => {
+    if (protection?.type !== 'oloroso' || !player.awawas[index]) {
+      return;
+    }
+
+    const adjacentIndexes = [index - 1, index + 1].filter(
+      (slotIndex) =>
+        slotIndex >= 0 &&
+        slotIndex < protections.length &&
+        player.awawas[slotIndex] &&
+        protections[slotIndex]?.type !== 'oloroso',
+    );
+
+    adjacentIndexes.forEach((slotIndex) => {
+      protections[slotIndex] = {
+        id: `escaping-p${player.id}-${index}-${slotIndex}`,
+        type: 'escaping',
+      };
+    });
+  });
+
+  return {
+    ...player,
+    protections,
+  };
+}
+
 function isProtectionPlacementBlocked(player: PlayerState, slotIndex: number) {
   return (
     (slotIndex > 0 && player.protections[slotIndex - 1]?.type === 'oloroso') ||
@@ -145,6 +177,7 @@ function getAguilaTargetIndex(state: GameState) {
         alive &&
         (player.protections[slotIndex]?.type === 'awawa' ||
           player.protections[slotIndex]?.type === 'solcito' ||
+          player.protections[slotIndex]?.type === 'escaping' ||
           !player.protections[slotIndex]),
     );
 
@@ -179,6 +212,18 @@ function getAguilaValidSlotIndexes(player: PlayerState) {
 
   if (solcitoIndexes.length > 0) {
     return solcitoIndexes;
+  }
+
+  const escapingIndexes = player.awawas
+    .map((alive, slotIndex) =>
+      alive && player.protections[slotIndex]?.type === 'escaping'
+        ? slotIndex
+        : -1,
+    )
+    .filter((slotIndex) => slotIndex !== -1);
+
+  if (escapingIndexes.length > 0) {
+    return escapingIndexes;
   }
 
   return player.awawas
@@ -371,6 +416,7 @@ function getGritarValidSlotIndexes(player: PlayerState) {
     .map((protection, index) =>
       player.awawas[index] &&
       !!protection &&
+      protection.type !== 'escaping' &&
       protection.type !== 'elefante' &&
       protection.type !== 'solcito'
         ? index
@@ -384,14 +430,16 @@ function canPlayGritar(state: GameState, player: PlayerState) {
 }
 
 function getReyTargetIndex(state: GameState) {
-  const currentPlayer = getCurrentPlayer(state);
-  const currentAwawas = getAliveAwawaCount(currentPlayer);
-  let highestCount = currentAwawas;
+  let highestCount = -1;
   let targetIndex: number | null = null;
 
   for (let step = 1; step < state.players.length; step += 1) {
     const index = (state.currentPlayerIndex + step) % state.players.length;
     const awawaCount = getAliveAwawaCount(state.players[index]);
+
+    if (awawaCount <= 0) {
+      continue;
+    }
 
     if (awawaCount > highestCount) {
       highestCount = awawaCount;
@@ -418,7 +466,7 @@ function canPlayRey(state: GameState, player: PlayerState) {
 }
 
 function clearTemporaryProtections(player: PlayerState) {
-  const protections: Array<Card | null> = player.protections.map((protection) => {
+    const protections: Array<Card | null> = player.protections.map((protection) => {
     if (!protection || !isTemporaryProtection(protection)) {
       return protection;
     }
@@ -437,8 +485,10 @@ function clearTemporaryProtections(player: PlayerState) {
   });
 
   return {
-    ...player,
-    protections,
+    ...syncEscapingMarkers({
+      ...player,
+      protections,
+    }),
   };
 }
 
@@ -660,8 +710,10 @@ function killAwawaAtSlot(player: PlayerState, targetIndex: number) {
     player.protections[targetIndex]?.type === 'awawa'
       ? 'awawa'
       : player.protections[targetIndex]?.type === 'solcito'
-      ? 'solcito'
-      : 'unprotected';
+        ? 'solcito'
+        : player.protections[targetIndex]?.type === 'escaping'
+          ? 'escaping'
+          : 'unprotected';
 
   if (targetType !== 'awawa') {
     awawas[targetIndex] = false;
@@ -784,20 +836,24 @@ function resolveAguilaAction(state: GameState) {
     );
     const awawaLost =
       getAliveAwawaCount(attackedPlayer) < getAliveAwawaCount(player);
+    const baseProtections =
+      targetType === 'unprotected' || targetType === 'escaping'
+        ? clearAliveProtections(attackedPlayer)
+        : attackedPlayer.protections;
+    const finalPlayer = syncEscapingMarkers({
+      ...attackedPlayer,
+      protections: baseProtections,
+    });
 
     return {
-      ...attackedPlayer,
-      protections:
-        targetType === 'unprotected'
-          ? clearAliveProtections(attackedPlayer)
-          : attackedPlayer.protections,
+      ...finalPlayer,
       notices: [
-        ...attackedPlayer.notices,
+        ...finalPlayer.notices,
         awawaLost
-          ? targetType === 'unprotected'
+          ? targetType === 'unprotected' || targetType === 'escaping'
             ? `P${actorId}'s \u00C1guila took one Awawa from you and removed your protections.`
             : `P${actorId}'s \u00C1guila took one Awawa from you.`
-          : targetType === 'unprotected'
+          : targetType === 'unprotected' || targetType === 'escaping'
             ? `P${actorId}'s \u00C1guila removed your protections, but did not take an Awawa.`
             : `P${actorId}'s \u00C1guila could not reach one of your unprotected Awawas.`,
       ],
@@ -1065,12 +1121,14 @@ function confirmOlorosoAction(state: GameState) {
     }
 
     return {
-      ...player,
-      protections,
-      notices: [
-        ...player.notices,
-        `P${actorId}'s Oloroso covered one of your Awawas for 2 turns.`,
-      ],
+      ...syncEscapingMarkers({
+        ...player,
+        protections,
+        notices: [
+          ...player.notices,
+          `P${actorId}'s Oloroso covered one of your Awawas for 2 turns.`,
+        ],
+      }),
     };
   });
 
@@ -1242,7 +1300,7 @@ function confirmReyAction(state: GameState) {
   const targetIndex = pendingAction.targetPlayerIndex;
   const stolenSlotIndex = pendingAction.selectedSlotIndex;
 
-  if (!state.players[targetIndex].awawas[stolenSlotIndex]) {
+  if (!getReyValidSlotIndexes(state.players[targetIndex]).includes(stolenSlotIndex)) {
     return state;
   }
 

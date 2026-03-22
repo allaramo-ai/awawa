@@ -13,6 +13,7 @@ export type CardTypeId =
   | 'awawa'
   | 'toilet'
   | 'oloroso'
+  | 'escaping'
   | 'gritar'
   | 'rey';
 

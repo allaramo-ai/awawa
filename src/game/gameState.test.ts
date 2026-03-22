@@ -420,9 +420,9 @@ describe('gameState', () => {
     expect(pendingTarget?.playerId).toBe(3);
     expect(pendingTarget?.validSlotIndexes).toEqual([0, 2, 4]);
     expect(afterPlay.players[2].protections[2]?.type).toBe('oloroso');
-    expect(afterPlay.players[2].protections[1]).toBeNull();
-    expect(afterPlay.players[2].protections[3]).toBeNull();
-    expect(blockedPlacement.players[2].protections[1]).toBeNull();
+    expect(afterPlay.players[2].protections[1]?.type).toBe('escaping');
+    expect(afterPlay.players[2].protections[3]?.type).toBe('escaping');
+    expect(blockedPlacement.players[2].protections[1]?.type).toBe('escaping');
   });
 
   it('oloroso disappears after two starts of the target player turn and then adjacent slots can receive protections again', () => {
@@ -443,6 +443,26 @@ describe('gameState', () => {
     expect(playerTwoFirstTurn.players[1].protections[2]?.type).toBe('oloroso');
     expect(playerTwoSecondTurn.players[1].protections[2]).toBeNull();
     expect(afterPlacement.players[1].protections[1]?.type).toBe('roca');
+  });
+
+  it('aguila prioritizes escaping before ordinary unprotected awawas', () => {
+    const state = createGameState(2);
+    state.turnsCompleted = 2;
+    state.players[0].hand = [{ id: 'aguila-x', type: 'aguila' }];
+    state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
+    state.players[1].protections[2] = {
+      id: 'oloroso-p2',
+      type: 'oloroso',
+      sourcePlayerId: 1,
+      remainingTurnStarts: 2,
+    };
+    state.players[1].protections[1] = { id: 'escaping-p2-2-1', type: 'escaping' };
+    state.players[1].protections[3] = { id: 'escaping-p2-2-3', type: 'escaping' };
+
+    const pendingState = playSelectedCard(selectCard(state, 'aguila-x'));
+    const pendingTarget = getPendingAguilaTarget(pendingState);
+
+    expect(pendingTarget?.validSlotIndexes).toEqual([1, 3]);
   });
 
   it('elefante replaces every alive protection slot and removes existing protections and solcitos', () => {
@@ -525,32 +545,50 @@ describe('gameState', () => {
     );
   });
 
-  it('rey can be played only if the player is missing an awawa and another player has more', () => {
+  it('rey can be played only if the player is missing an awawa and another player still has awawas to steal', () => {
     const enabledState = createGameState(3);
     enabledState.turnsCompleted = 2;
     enabledState.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
     enabledState.players[0].awawas = [true, true, true, false, true];
+    enabledState.players[1].protections = enabledState.players[1].protections.map(() => ({
+      id: 'filled-p2',
+      type: 'roca',
+    }));
 
     const disabledState = createGameState(3);
     disabledState.turnsCompleted = 2;
     disabledState.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
     disabledState.players[0].awawas = [true, true, true, false, true];
-    disabledState.players[1].awawas = [true, true, true, false, true];
-    disabledState.players[2].awawas = [true, true, true, false, true];
+    disabledState.players[1].awawas = [false, false, false, false, false];
+    disabledState.players[2].awawas = [false, false, false, false, false];
 
     expect(canPlaySelectedCard(selectCard(enabledState, 'rey-x'))).toBe(true);
     expect(canPlaySelectedCard(selectCard(disabledState, 'rey-x'))).toBe(false);
   });
 
-  it('rey steals one awawa from the highest-count player closest to the right and drops their protection', () => {
+  it('rey steals one awawa from the highest-count player closest to the right even if that awawa is protected', () => {
     const state = createGameState(4);
     state.turnsCompleted = 4;
     state.players[0].hand = [{ id: 'rey-x', type: 'rey' }];
     state.players[0].awawas = [true, false, true, true, true];
-    state.players[1].awawas = [true, true, true, true, true];
-    state.players[1].protections[0] = { id: 'roca-p2', type: 'roca' };
-    state.players[3].awawas = [true, true, true, true, true];
-    state.players[3].protections[0] = { id: 'planta-p4', type: 'planta' };
+    state.players[1].awawas = [true, true, true, false, false];
+    state.players[1].protections = [
+      { id: 'roca-p2', type: 'roca' },
+      { id: 'awawa-p2', type: 'awawa', sourcePlayerId: 3 },
+      { id: 'awawa-p2b', type: 'awawa', sourcePlayerId: 4 },
+      null,
+      null,
+    ];
+    state.players[2].awawas = [true, false, false, false, false];
+    state.players[2].protections[0] = { id: 'roca-p3', type: 'roca' };
+    state.players[3].awawas = [true, true, true, true, false];
+    state.players[3].protections = [
+      { id: 'awawa-p4', type: 'awawa', sourcePlayerId: 2 },
+      { id: 'planta-p4', type: 'planta' },
+      { id: 'roca-p4', type: 'roca' },
+      null,
+      null,
+    ];
 
     const pendingState = playSelectedCard(selectCard(state, 'rey-x'));
     const pendingTarget = getPendingTarget(pendingState);
@@ -559,13 +597,13 @@ describe('gameState', () => {
     );
 
     expect(pendingTarget?.type).toBe('rey');
+    expect(pendingTarget?.playerId).toBe(4);
+    expect(pendingTarget?.validSlotIndexes).toEqual([0, 1, 2, 3]);
     expect(afterPlay.players[0].awawas).toEqual([true, true, true, true, true]);
-    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(4);
-    expect(afterPlay.players[1].protections[0]).toBeNull();
-    expect(afterPlay.players[3].awawas.filter(Boolean)).toHaveLength(5);
-    expect(afterPlay.players[0].notices.join(' ')).toContain(
-      'Your Rey stole one Awawa from P2.',
-    );
+    expect(afterPlay.players[3].awawas.filter(Boolean)).toHaveLength(3);
+    expect(afterPlay.players[3].protections[0]).toBeNull();
+    expect(afterPlay.players[1].awawas.filter(Boolean)).toHaveLength(3);
+    expect(afterPlay.players[0].notices.join(' ')).toContain('Your Rey stole one Awawa from P4.');
   });
 
   it('starts an aguila target selection and lets the player cancel it', () => {

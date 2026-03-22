@@ -18,7 +18,7 @@ export const CARD_DEFINITIONS: CardDefinition[] = [
   { id: 'rey', names: { es: 'Rey' } },
 ];
 
-export const CARD_COPY_COUNTS: Record<CardTypeId, number> = {
+export const CARD_COPY_COUNTS: Partial<Record<CardTypeId, number>> = {
   roca: GAME_CONFIG.copiesPerCardType,
   cueva: GAME_CONFIG.copiesPerCardType,
   planta: GAME_CONFIG.copiesPerCardType,
@@ -43,7 +43,9 @@ export function buildConfiguredDeck(): Card[] {
   const deck: Card[] = [];
 
   for (const definition of CARD_DEFINITIONS) {
-    for (let copyNumber = 1; copyNumber <= CARD_COPY_COUNTS[definition.id]; copyNumber += 1) {
+    const copies = CARD_COPY_COUNTS[definition.id] ?? 0;
+
+    for (let copyNumber = 1; copyNumber <= copies; copyNumber += 1) {
       deck.push({
         id: `${definition.id}-${copyNumber}`,
         type: definition.id,
@@ -68,6 +70,10 @@ export function getCardLabel(card: Card) {
 
   if (card.type === 'awawa' && card.sourcePlayerId) {
     return `Awawa P${card.sourcePlayerId}`;
+  }
+
+  if (card.type === 'escaping') {
+    return 'Escaping';
   }
 
   return (
